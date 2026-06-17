@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // url is now defined in prisma.config.ts
+}
+
+model User {
+  id            String    @id @default(cuid())
+  phoneOrEmail  String    @unique
+  passwordHash  String
+  name          String
+  birthDate     DateTime
+  gender        String
+  bio           String?
+  photo		String?
+  phone 	String?
+  latitude      Float?
+  longitude     Float?
+  isVerified    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  swipesGiven   Swipe[]   @relation("Swiper")
+  swipesReceived Swipe[]  @relation("Swiped")
+  matchesAsUser1 Match[]   @relation("User1")
+  matchesAsUser2 Match[]   @relation("User2")
+  sentMessages  Message[]
+}
+
+model Swipe {
+  id          String   @id @default(cuid())
+  swiperId    String
+  swipedId    String
+  direction   String
+  createdAt   DateTime @default(now())
+
+  swiper      User     @relation("Swiper", fields: [swiperId], references: [id])
+  swiped      User     @relation("Swiped", fields: [swipedId], references: [id])
+
+  @@unique([swiperId, swipedId])
+  @@index([swiperId])
+}
+
+model Match {
+  id          String   @id @default(cuid())
+  user1Id     String
+  user2Id     String
+  status      String   @default("PENDING")
+  matchedAt   DateTime @default(now())
+  
+  user1       User     @relation("User1", fields: [user1Id], references: [id])
+  user2       User     @relation("User2", fields: [user2Id], references: [id])
+  
+  messages    Message[]
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  matchId     String
+  senderId    String
+  content     String
+  isRead      Boolean  @default(false)
+  sentAt      DateTime @default(now())
+
+  match       Match    @relation(fields: [matchId], references: [id])
+  sender      User     @relation(fields: [senderId], references: [id])
+}

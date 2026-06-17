@@ -1,0 +1,22 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15
+    container_name: orbit_postgres
+    environment:
+      POSTGRES_USER: orbit_admin
+      POSTGRES_PASSWORD: orbit123
+      POSTGRES_DB: orbit_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:alpine
+    container_name: orbit_redis
+    ports:
+      - "6380:6379"   # ← Changed from 6379 to 6380
+
+volumes:
+  postgres_data:

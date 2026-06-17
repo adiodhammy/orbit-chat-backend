@@ -3,11 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "scripts": {
-    "prestart": "npx prisma generate && npx prisma db push",
-    "start": "npx ts-node src/index.ts",
-    "dev": "nodemon src/index.ts"
-  },
+  ,
   "keywords": [],
   "author": "",
   "license": "ISC",

@@ -490,6 +490,31 @@ app.post('/messages', verifyToken, async (req: any, res: any) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// --- UPDATE USER PROFILE ---
+app.put('/users/:userId', verifyToken, async (req: any, res: any) => {
+  try {
+    const userId = req.params.userId;
+    const { name, bio } = req.body;
+
+    // Make sure the user is updating their own profile
+    if (userId !== req.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { name, bio },
+    });
+
+    const { passwordHash: _, ...userWithoutPassword } = updatedUser;
+    res.json({ user: userWithoutPassword });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
 // --- UPLOAD PROFILE PHOTO ---
 app.post('/upload', verifyToken, upload.single('photo'), async (req: any, res: any) => {
   try {

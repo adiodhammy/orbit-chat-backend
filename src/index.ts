@@ -654,7 +654,7 @@ app.post('/upload', verifyToken, upload.single('photo'), async (req: any, res: a
 });
 
 // --- START SERVER ---
-server.listen(PORT, () => {
-  console.log(`🚀 ORBIT'S CHAT backend is running on http://localhost:${PORT}`);
-  console.log(`🔌 WebSocket server is ready on ws://localhost:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 ORBIT'S CHAT backend is running on http://0.0.0.0:${PORT}`);
+  console.log(`🔌 WebSocket server is ready on ws://0.0.0.0:${PORT}`);
 });

@@ -9,6 +9,8 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import dotenv from 'dotenv';
 import http from 'http';
 import { Server as SocketServer } from 'socket.io';
+import crypto from 'crypto';
+import { sendVerificationEmail, sendResetPasswordEmail } from './services/emailService.js';
 
 dotenv.config();
 
@@ -51,7 +53,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('send_message', async (data) => {
-console.log('📩 send_message received:', data); // <-- ADD THIS LINE
+    console.log('📩 send_message received:', data);
     try {
       const { matchId, senderId, content } = data;
 
@@ -94,7 +96,7 @@ app.get('/ping', (req, res) => {
   res.send('pong');
 });
 
-// --- REGISTER ---
+// --- REGISTER (with Email Verification) ---
 app.post('/auth/register', async (req, res) => {
   try {
     const { phoneOrEmail, password, name, birthDate, gender } = req.body;
@@ -116,6 +118,8 @@ app.post('/auth/register', async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+
     const newUser = await prisma.user.create({
       data: {
         phoneOrEmail,
@@ -123,8 +127,13 @@ app.post('/auth/register', async (req, res) => {
         name,
         birthDate: new Date(birthDate),
         gender,
+        verificationToken,
+        verifiedAt: null,
       },
     });
+
+    // Send verification email (non-blocking)
+    sendVerificationEmail(newUser.phoneOrEmail, verificationToken).catch(console.error);
 
     const token = jwt.sign(
       { userId: newUser.id, phoneOrEmail: newUser.phoneOrEmail },
@@ -135,7 +144,7 @@ app.post('/auth/register', async (req, res) => {
     const { passwordHash: _, ...userWithoutPassword } = newUser;
 
     res.status(201).json({
-      message: 'User registered successfully! 🚀',
+      message: 'User registered successfully! Please check your email to verify your account. 🚀',
       user: userWithoutPassword,
       token,
     });
@@ -145,7 +154,86 @@ app.post('/auth/register', async (req, res) => {
   }
 });
 
-// --- LOGIN ---
+// --- VERIFY EMAIL ---
+app.get('/auth/verify', async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).json({ error: 'Missing token' });
+
+    const user = await prisma.user.findFirst({
+      where: { verificationToken: token as string },
+    });
+    if (!user) return res.status(400).json({ error: 'Invalid or expired token' });
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { verifiedAt: new Date(), verificationToken: null },
+    });
+
+    res.json({ message: 'Email verified successfully! You can now log in.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+// --- REQUEST PASSWORD RESET ---
+app.post('/auth/request-reset', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email required' });
+
+    const user = await prisma.user.findUnique({
+      where: { phoneOrEmail: email },
+    });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        resetToken,
+        resetTokenExpiry: new Date(Date.now() + 3600000), // 1 hour
+      },
+    });
+
+    await sendResetPasswordEmail(email, resetToken);
+    res.json({ message: 'Reset link sent to your email' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to send reset email' });
+  }
+});
+
+// --- RESET PASSWORD ---
+app.post('/auth/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) return res.status(400).json({ error: 'Missing fields' });
+
+    const user = await prisma.user.findFirst({
+      where: {
+        resetToken: token,
+        resetTokenExpiry: { gt: new Date() },
+      },
+    });
+    if (!user) return res.status(400).json({ error: 'Invalid or expired token' });
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash, resetToken: null, resetTokenExpiry: null },
+    });
+
+    res.json({ message: 'Password reset successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
+// --- LOGIN (with Verification Check) ---
 app.post('/auth/login', async (req, res) => {
   try {
     const { phoneOrEmail, password } = req.body;
@@ -162,6 +250,11 @@ app.post('/auth/login', async (req, res) => {
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Check if email is verified
+    if (!user.verifiedAt) {
+      return res.status(403).json({ error: 'Please verify your email before logging in' });
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
@@ -248,7 +341,7 @@ app.get('/feed', verifyToken, async (req: any, res: any) => {
       select: {
         id: true,
         name: true,
-	photo: true,
+        photo: true,
         birthDate: true,
         gender: true,
         bio: true,
@@ -370,7 +463,7 @@ app.get('/matches', verifyToken, async (req: any, res: any) => {
           select: {
             id: true,
             name: true,
-	    photo: true,
+            photo: true,
             phoneOrEmail: true,
           },
         },
@@ -378,7 +471,7 @@ app.get('/matches', verifyToken, async (req: any, res: any) => {
           select: {
             id: true,
             name: true,
-	    photo: true,
+            photo: true,
             phoneOrEmail: true,
           },
         },
@@ -495,7 +588,7 @@ app.post('/messages', verifyToken, async (req: any, res: any) => {
 app.put('/users/:userId', verifyToken, async (req: any, res: any) => {
   try {
     const userId = req.params.userId;
-    const { name, bio } = req.body;
+    const { name, bio, interests, height, relationshipGoal } = req.body;
 
     // Make sure the user is updating their own profile
     if (userId !== req.userId) {
@@ -504,7 +597,13 @@ app.put('/users/:userId', verifyToken, async (req: any, res: any) => {
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: { name, bio },
+      data: {
+        name,
+        bio,
+        interests,
+        height,
+        relationshipGoal,
+      },
     });
 
     const { passwordHash: _, ...userWithoutPassword } = updatedUser;

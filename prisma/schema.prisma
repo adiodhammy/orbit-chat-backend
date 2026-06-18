@@ -16,8 +16,15 @@ model User {
   gender        String
   bio           String?
   photo		String?
+  interests           String?   // e.g., "Music, Travel"
+  height              Int?      // in cm
+  relationshipGoal    String?   // e.g., "Casual, Serious"
   phone 	String?
   latitude      Float?
+  verificationToken   String?   // random token for email verification
+  verifiedAt          DateTime? // null if not verified
+  resetToken          String?   // for password reset
+  resetTokenExpiry    DateTime? // expiry for reset token
   longitude     Float?
   isVerified    Boolean   @default(false)
   createdAt     DateTime  @default(now())

@@ -10,7 +10,7 @@ import dotenv from 'dotenv';
 import http from 'http';
 import { Server as SocketServer } from 'socket.io';
 import crypto from 'crypto';
-import { sendVerificationEmail, sendResetPasswordEmail } from './services/emailService.js';
+import { sendVerificationEmail, sendResetPasswordEmail } from './services/emailService';
 
 dotenv.config();
 

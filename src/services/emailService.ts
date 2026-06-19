@@ -1,10 +1,11 @@
 import nodemailer from 'nodemailer';
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.ethereal.email',
+  port: 587,
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    user: 'nicholaus95@ethereal.email',
+    pass: '53bHMG6Q3rVkSE2D8P',
   },
 });
 
@@ -12,7 +13,7 @@ export const sendVerificationEmail = async (to: string, token: string) => {
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4000';
   const link = `${frontendUrl}/verify?token=${token}`;
   await transporter.sendMail({
-    from: process.env.EMAIL_USER,
+    from: 'nicholaus95@ethereal.email',
     to,
     subject: 'Verify your ORBIT\'S CHAT account',
     html: `<h2>Welcome to ORBIT'S CHAT!</h2>
@@ -26,7 +27,7 @@ export const sendResetPasswordEmail = async (to: string, token: string) => {
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4000';
   const link = `${frontendUrl}/reset-password?token=${token}`;
   await transporter.sendMail({
-    from: process.env.EMAIL_USER,
+    from: 'nicholaus95@ethereal.email',
     to,
     subject: 'Reset your ORBIT\'S CHAT password',
     html: `<h2>Password Reset Request</h2>

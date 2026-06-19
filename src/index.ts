@@ -96,7 +96,7 @@ app.get('/ping', (req, res) => {
   res.send('pong');
 });
 
-// --- REGISTER (with Email Verification) ---
+// --- REGISTER (Email Verification Bypassed) ---
 app.post('/auth/register', async (req, res) => {
   try {
     const { phoneOrEmail, password, name, birthDate, gender } = req.body;
@@ -120,7 +120,7 @@ app.post('/auth/register', async (req, res) => {
 
     const verificationToken = crypto.randomBytes(32).toString('hex');
 
-    // Create user
+    // Create user – auto-verified immediately (email bypassed)
     const newUser = await prisma.user.create({
       data: {
         phoneOrEmail,
@@ -129,15 +129,15 @@ app.post('/auth/register', async (req, res) => {
         birthDate: new Date(birthDate),
         gender,
         verificationToken,
-        verifiedAt: null,
+        verifiedAt: new Date(), // <-- Auto-verified
       },
     });
 
-    // ✅ Send verification email (non-blocking)
-    console.log('📧 Attempting to send verification email to:', newUser.phoneOrEmail);
-    sendVerificationEmail(newUser.phoneOrEmail, verificationToken)
-      .then(() => console.log('✅ Verification email sent successfully'))
-      .catch((error) => console.error('❌ Failed to send verification email:', error));
+    // Email sending is disabled (bypassed)
+    // console.log('📧 Attempting to send verification email to:', newUser.phoneOrEmail);
+    // sendVerificationEmail(newUser.phoneOrEmail, verificationToken)
+    //   .then(() => console.log('✅ Verification email sent successfully'))
+    //   .catch((error) => console.error('❌ Failed to send verification email:', error));
 
     const token = jwt.sign(
       { userId: newUser.id, phoneOrEmail: newUser.phoneOrEmail },
@@ -148,7 +148,7 @@ app.post('/auth/register', async (req, res) => {
     const { passwordHash: _, ...userWithoutPassword } = newUser;
 
     res.status(201).json({
-      message: 'User registered successfully! Please check your email to verify your account. 🚀',
+      message: 'User registered successfully! 🚀',
       user: userWithoutPassword,
       token,
     });
@@ -158,7 +158,7 @@ app.post('/auth/register', async (req, res) => {
   }
 });
 
-// --- VERIFY EMAIL ---
+// --- VERIFY EMAIL (Keep for future use) ---
 app.get('/auth/verify', async (req, res) => {
   try {
     const { token } = req.query;
@@ -201,8 +201,9 @@ app.post('/auth/request-reset', async (req, res) => {
       },
     });
 
-    await sendResetPasswordEmail(email, resetToken);
-    res.json({ message: 'Reset link sent to your email' });
+    // Commented out – email sending is disabled
+    // await sendResetPasswordEmail(email, resetToken);
+    res.json({ message: 'Reset link generated (email disabled)' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to send reset email' });
@@ -237,7 +238,7 @@ app.post('/auth/reset-password', async (req, res) => {
   }
 });
 
-// --- LOGIN (with Verification Check) ---
+// --- LOGIN (Verification Check Removed) ---
 app.post('/auth/login', async (req, res) => {
   try {
     const { phoneOrEmail, password } = req.body;
@@ -256,10 +257,10 @@ app.post('/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Check if email is verified
-    if (!user.verifiedAt) {
-      return res.status(403).json({ error: 'Please verify your email before logging in' });
-    }
+    // Verification check removed (bypassed)
+    // if (!user.verifiedAt) {
+    //   return res.status(403).json({ error: 'Please verify your email before logging in' });
+    // }
 
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
 
@@ -594,7 +595,6 @@ app.put('/users/:userId', verifyToken, async (req: any, res: any) => {
     const userId = req.params.userId;
     const { name, bio, interests, height, relationshipGoal } = req.body;
 
-    // Make sure the user is updating their own profile
     if (userId !== req.userId) {
       return res.status(403).json({ error: 'Forbidden' });
     }
@@ -626,7 +626,6 @@ app.post('/upload', verifyToken, upload.single('photo'), async (req: any, res: a
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    // Upload to Cloudinary
     const result = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         { folder: 'orbit_chat/profiles' },
@@ -640,7 +639,6 @@ app.post('/upload', verifyToken, upload.single('photo'), async (req: any, res: a
 
     const photoUrl = (result as any).secure_url;
 
-    // Update user profile
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: { photo: photoUrl },

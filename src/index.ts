@@ -10,7 +10,7 @@ import dotenv from 'dotenv';
 import http from 'http';
 import { Server as SocketServer } from 'socket.io';
 import crypto from 'crypto';
-import { sendVerificationEmail, sendResetPasswordEmail } from './services/emailService';
+import { sendVerificationEmail, sendResetPasswordEmail } from './services/emailService.js';
 
 dotenv.config();
 
@@ -120,6 +120,7 @@ app.post('/auth/register', async (req, res) => {
 
     const verificationToken = crypto.randomBytes(32).toString('hex');
 
+    // Create user
     const newUser = await prisma.user.create({
       data: {
         phoneOrEmail,
@@ -132,6 +133,30 @@ app.post('/auth/register', async (req, res) => {
       },
     });
 
+    // ✅ Send verification email (non-blocking)
+    console.log('📧 Attempting to send verification email to:', newUser.phoneOrEmail);
+    sendVerificationEmail(newUser.phoneOrEmail, verificationToken)
+      .then(() => console.log('✅ Verification email sent successfully'))
+      .catch((error) => console.error('❌ Failed to send verification email:', error));
+
+    const token = jwt.sign(
+      { userId: newUser.id, phoneOrEmail: newUser.phoneOrEmail },
+      process.env.JWT_SECRET!,
+      { expiresIn: '7d' }
+    );
+
+    const { passwordHash: _, ...userWithoutPassword } = newUser;
+
+    res.status(201).json({
+      message: 'User registered successfully! Please check your email to verify your account. 🚀',
+      user: userWithoutPassword,
+      token,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
     // Send verification email (non-blocking)
     sendVerificationEmail(newUser.phoneOrEmail, verificationToken).catch(console.error);
 

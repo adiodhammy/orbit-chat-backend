@@ -157,27 +157,6 @@ app.post('/auth/register', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-    // Send verification email (non-blocking)
-    sendVerificationEmail(newUser.phoneOrEmail, verificationToken).catch(console.error);
-
-    const token = jwt.sign(
-      { userId: newUser.id, phoneOrEmail: newUser.phoneOrEmail },
-      process.env.JWT_SECRET!,
-      { expiresIn: '7d' }
-    );
-
-    const { passwordHash: _, ...userWithoutPassword } = newUser;
-
-    res.status(201).json({
-      message: 'User registered successfully! Please check your email to verify your account. 🚀',
-      user: userWithoutPassword,
-      token,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
 // --- VERIFY EMAIL ---
 app.get('/auth/verify', async (req, res) => {

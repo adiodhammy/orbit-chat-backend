@@ -654,6 +654,40 @@ app.post('/upload', verifyToken, upload.single('photo'), async (req: any, res: a
     res.status(500).json({ error: 'Upload failed' });
   }
 });
+// --- GET USER PROFILE ---
+app.get('/users/:userId', verifyToken, async (req: any, res: any) => {
+  try {
+    const userId = req.params.userId;
+    if (userId !== req.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        phoneOrEmail: true,
+        name: true,
+        bio: true,
+        photo: true,
+        interests: true,
+        height: true,
+        relationshipGoal: true,
+        birthDate: true,
+        gender: true,
+        isVerified: true,
+        createdAt: true,
+        updatedAt: true,
+      }
+    });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({ user });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch user' });
+  }
+});
 
 // --- START SERVER ---
 server.listen(PORT, '0.0.0.0', () => {

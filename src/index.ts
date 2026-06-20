@@ -706,6 +706,58 @@ app.get('/users/:userId', verifyToken, async (req: any, res: any) => {
     res.status(500).json({ error: 'Failed to fetch user' });
   }
 });
+// --- MARK MESSAGES AS READ ---
+app.put('/messages/read/:matchId', verifyToken, async (req: any, res: any) => {
+  try {
+    const userId = req.userId;
+    const { matchId } = req.params;
+
+    // Get the match to find the other user
+    const match = await prisma.match.findFirst({
+      where: {
+        id: matchId,
+        OR: [
+          { user1Id: userId },
+          { user2Id: userId },
+        ],
+      },
+    });
+
+    if (!match) {
+      return res.status(404).json({ error: 'Match not found' });
+    }
+
+    // Mark all messages where the current user is the recipient and isRead is false
+    const updatedMessages = await prisma.message.updateMany({
+      where: {
+        matchId: matchId,
+        senderId: { not: userId }, // not sent by current user
+        isRead: false,
+      },
+      data: {
+        isRead: true,
+      },
+    });
+
+    // Find the other user (the sender)
+    const otherUserId = match.user1Id === userId ? match.user2Id : match.user1Id;
+
+    // Emit WebSocket event to the sender
+    io.to(`user_${otherUserId}`).emit('messages_read', {
+      matchId: matchId,
+      readerId: userId,
+      readAt: new Date().toISOString(),
+    });
+
+    res.json({
+      message: 'Messages marked as read',
+      count: updatedMessages.count,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to mark messages as read' });
+  }
+});
 
 // --- START SERVER ---
 server.listen(PORT, '0.0.0.0', () => {

@@ -10,7 +10,7 @@ import dotenv from 'dotenv';
 import http from 'http';
 import { Server as SocketServer } from 'socket.io';
 import crypto from 'crypto';
-import { sendVerificationEmail, sendResetPasswordEmail } from './services/emailService.js';
+import { sendVerificationEmail, sendResetPasswordEmail } from './services/emailService';
 
 dotenv.config();
 
@@ -84,6 +84,23 @@ io.on('connection', (socket) => {
       console.error(error);
       socket.emit('error', 'Failed to send message');
     }
+  });
+
+  // --- TYPING INDICATOR EVENTS ---
+  socket.on('typing_start', ({ matchId, senderId, recipientId }) => {
+    io.to(`user_${recipientId}`).emit('user_typing', {
+      matchId,
+      senderId,
+      isTyping: true,
+    });
+  });
+
+  socket.on('typing_stop', ({ matchId, senderId, recipientId }) => {
+    io.to(`user_${recipientId}`).emit('user_typing', {
+      matchId,
+      senderId,
+      isTyping: false,
+    });
   });
 
   socket.on('disconnect', () => {
@@ -654,6 +671,7 @@ app.post('/upload', verifyToken, upload.single('photo'), async (req: any, res: a
     res.status(500).json({ error: 'Upload failed' });
   }
 });
+
 // --- GET USER PROFILE ---
 app.get('/users/:userId', verifyToken, async (req: any, res: any) => {
   try {

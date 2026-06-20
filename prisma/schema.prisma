@@ -72,6 +72,11 @@ model Message {
   isRead      Boolean  @default(false)
   sentAt      DateTime @default(now())
 
+   // --- NEW: Reply to Message ---
+  replyToId   String?  @map("reply_to_id")
+  replyTo     Message? @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies     Message[] @relation("MessageReplies")
+
   match       Match    @relation(fields: [matchId], references: [id])
   sender      User     @relation(fields: [senderId], references: [id])
 }

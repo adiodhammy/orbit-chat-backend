@@ -55,7 +55,7 @@ io.on('connection', (socket) => {
   socket.on('send_message', async (data) => {
     console.log('📩 send_message received:', data);
     try {
-      const { matchId, senderId, content, imageUrl, replyToId } = data;
+      const { matchId, senderId, content, imageUrl, audioUrl, replyToId } = data;
 
       const message = await prisma.message.create({
         data: {
@@ -63,6 +63,7 @@ io.on('connection', (socket) => {
           senderId,
           content: content || null,
           imageUrl: imageUrl || null,
+          audioUrl: audioUrl || null,
           replyToId: replyToId || null,
         },
       });
@@ -541,6 +542,7 @@ app.get('/messages/:matchId', verifyToken, async (req: any, res: any) => {
         senderId: true,
         content: true,
         imageUrl: true,
+	audioUrl: true,
         sentAt: true,
         isRead: true,
         replyToId: true,
@@ -566,7 +568,7 @@ app.get('/messages/:matchId', verifyToken, async (req: any, res: any) => {
 app.post('/messages', verifyToken, async (req: any, res: any) => {
   try {
     const senderId = req.userId;
-    const { matchId, content, imageUrl, replyToId } = req.body;
+    const { matchId, content, imageUrl, audioUrl, replyToId } = req.body;
 
     if (!matchId || (!content && !imageUrl)) {
       return res.status(400).json({ error: 'Missing matchId, content, or imageUrl' });
@@ -592,6 +594,7 @@ app.post('/messages', verifyToken, async (req: any, res: any) => {
         senderId: senderId,
         content: content || null,
         imageUrl: imageUrl || null,
+	audioUrl: audioUrl || null,
         replyToId: replyToId || null,
       },
     });
@@ -734,6 +737,36 @@ app.get('/users/:userId', verifyToken, async (req: any, res: any) => {
   }
 });
 
+// --- UPLOAD CHAT AUDIO ---
+app.post('/upload/chat/audio', verifyToken, upload.single('audio'), async (req: any, res: any) => {
+  try {
+    const userId = req.userId;
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { 
+          folder: 'orbit_chat/chat_audio',
+          resource_type: 'auto',
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+      stream.end(req.file.buffer);
+    });
+
+    const audioUrl = (result as any).secure_url;
+    res.json({ audioUrl });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
 // --- MARK MESSAGES AS READ ---
 app.put('/messages/read/:matchId', verifyToken, async (req: any, res: any) => {
   try {
@@ -780,6 +813,96 @@ app.put('/messages/read/:matchId', verifyToken, async (req: any, res: any) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to mark messages as read' });
+  }
+});
+
+// --- MESSAGE REACTIONS ---
+socket.on('add_reaction', async ({ messageId, userId, emoji }) => {
+  try {
+    const reaction = await prisma.reaction.upsert({
+      where: {
+        messageId_userId_emoji: {
+          messageId,
+          userId,
+          emoji,
+        },
+      },
+      update: {},
+      create: {
+        messageId,
+        userId,
+        emoji,
+      },
+    });
+
+    // Find the message to get the match
+    const message = await prisma.message.findUnique({
+      where: { id: messageId },
+      select: { matchId: true },
+    });
+
+    if (message) {
+      const match = await prisma.match.findFirst({
+        where: { id: message.matchId },
+      });
+      if (match) {
+        const recipientId = match.user1Id === userId ? match.user2Id : match.user1Id;
+        io.to(`user_${recipientId}`).emit('reaction_added', {
+          messageId,
+          userId,
+          emoji,
+        });
+        socket.emit('reaction_added', {
+          messageId,
+          userId,
+          emoji,
+        });
+      }
+    }
+  } catch (error) {
+    console.error(error);
+    socket.emit('error', 'Failed to add reaction');
+  }
+});
+
+socket.on('remove_reaction', async ({ messageId, userId, emoji }) => {
+  try {
+    await prisma.reaction.delete({
+      where: {
+        messageId_userId_emoji: {
+          messageId,
+          userId,
+          emoji,
+        },
+      },
+    });
+
+    const message = await prisma.message.findUnique({
+      where: { id: messageId },
+      select: { matchId: true },
+    });
+
+    if (message) {
+      const match = await prisma.match.findFirst({
+        where: { id: message.matchId },
+      });
+      if (match) {
+        const recipientId = match.user1Id === userId ? match.user2Id : match.user1Id;
+        io.to(`user_${recipientId}`).emit('reaction_removed', {
+          messageId,
+          userId,
+          emoji,
+        });
+        socket.emit('reaction_removed', {
+          messageId,
+          userId,
+          emoji,
+        });
+      }
+    }
+  } catch (error) {
+    console.error(error);
+    socket.emit('error', 'Failed to remove reaction');
   }
 });
 

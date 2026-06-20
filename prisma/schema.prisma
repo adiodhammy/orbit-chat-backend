@@ -68,15 +68,29 @@ model Message {
   id          String   @id @default(cuid())
   matchId     String
   senderId    String
-  content     String
+  content     String?
+  imageUrl    String?
+  audioUrl    String?
   isRead      Boolean  @default(false)
   sentAt      DateTime @default(now())
-
-   // --- NEW: Reply to Message ---
   replyToId   String?  @map("reply_to_id")
   replyTo     Message? @relation("MessageReplies", fields: [replyToId], references: [id])
   replies     Message[] @relation("MessageReplies")
+  reactions   Reaction[] // <-- NEW
 
   match       Match    @relation(fields: [matchId], references: [id])
   sender      User     @relation(fields: [senderId], references: [id])
+}
+
+model Reaction {
+  id          String   @id @default(cuid())
+  messageId   String
+  userId      String
+  emoji       String   // e.g. "❤️", "😂", "😮", "😢", "👍"
+  createdAt   DateTime @default(now())
+
+  message     Message  @relation(fields: [messageId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@unique([messageId, userId, emoji])
 }

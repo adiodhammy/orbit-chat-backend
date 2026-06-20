@@ -4,9 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-  "postinstall": "npx prisma generate",
-  "start": "tsx src/index.ts",
-  "dev": "nodemon src/index.ts"
+  "dev": "tsx src/index.ts",
+  "start": "tsx src/index.ts"
 },
   "keywords": [],
   "author": "",

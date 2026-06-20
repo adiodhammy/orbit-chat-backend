@@ -55,13 +55,15 @@ io.on('connection', (socket) => {
   socket.on('send_message', async (data) => {
     console.log('📩 send_message received:', data);
     try {
-      const { matchId, senderId, content } = data;
+      const { matchId, senderId, content, imageUrl, replyToId } = data;
 
       const message = await prisma.message.create({
         data: {
           matchId,
           senderId,
-          content,
+          content: content || null,
+          imageUrl: imageUrl || null,
+          replyToId: replyToId || null,
         },
       });
 
@@ -137,7 +139,6 @@ app.post('/auth/register', async (req, res) => {
 
     const verificationToken = crypto.randomBytes(32).toString('hex');
 
-    // Create user – auto-verified immediately (email bypassed)
     const newUser = await prisma.user.create({
       data: {
         phoneOrEmail,
@@ -146,15 +147,9 @@ app.post('/auth/register', async (req, res) => {
         birthDate: new Date(birthDate),
         gender,
         verificationToken,
-        verifiedAt: new Date(), // <-- Auto-verified
+        verifiedAt: new Date(),
       },
     });
-
-    // Email sending is disabled (bypassed)
-    // console.log('📧 Attempting to send verification email to:', newUser.phoneOrEmail);
-    // sendVerificationEmail(newUser.phoneOrEmail, verificationToken)
-    //   .then(() => console.log('✅ Verification email sent successfully'))
-    //   .catch((error) => console.error('❌ Failed to send verification email:', error));
 
     const token = jwt.sign(
       { userId: newUser.id, phoneOrEmail: newUser.phoneOrEmail },
@@ -214,12 +209,10 @@ app.post('/auth/request-reset', async (req, res) => {
       where: { id: user.id },
       data: {
         resetToken,
-        resetTokenExpiry: new Date(Date.now() + 3600000), // 1 hour
+        resetTokenExpiry: new Date(Date.now() + 3600000),
       },
     });
 
-    // Commented out – email sending is disabled
-    // await sendResetPasswordEmail(email, resetToken);
     res.json({ message: 'Reset link generated (email disabled)' });
   } catch (error) {
     console.error(error);
@@ -273,11 +266,6 @@ app.post('/auth/login', async (req, res) => {
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-
-    // Verification check removed (bypassed)
-    // if (!user.verifiedAt) {
-    //   return res.status(403).json({ error: 'Please verify your email before logging in' });
-    // }
 
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
 
@@ -552,8 +540,18 @@ app.get('/messages/:matchId', verifyToken, async (req: any, res: any) => {
         id: true,
         senderId: true,
         content: true,
+        imageUrl: true,
         sentAt: true,
         isRead: true,
+        replyToId: true,
+        replyTo: {
+          select: {
+            id: true,
+            content: true,
+            senderId: true,
+            sentAt: true,
+          },
+        },
       },
     });
 
@@ -568,10 +566,10 @@ app.get('/messages/:matchId', verifyToken, async (req: any, res: any) => {
 app.post('/messages', verifyToken, async (req: any, res: any) => {
   try {
     const senderId = req.userId;
-    const { matchId, content } = req.body;
+    const { matchId, content, imageUrl, replyToId } = req.body;
 
-    if (!matchId || !content) {
-      return res.status(400).json({ error: 'Missing matchId or content' });
+    if (!matchId || (!content && !imageUrl)) {
+      return res.status(400).json({ error: 'Missing matchId, content, or imageUrl' });
     }
 
     const match = await prisma.match.findFirst({
@@ -592,7 +590,9 @@ app.post('/messages', verifyToken, async (req: any, res: any) => {
       data: {
         matchId: matchId,
         senderId: senderId,
-        content: content,
+        content: content || null,
+        imageUrl: imageUrl || null,
+        replyToId: replyToId || null,
       },
     });
 
@@ -672,6 +672,33 @@ app.post('/upload', verifyToken, upload.single('photo'), async (req: any, res: a
   }
 });
 
+// --- UPLOAD CHAT IMAGE ---
+app.post('/upload/chat', verifyToken, upload.single('image'), async (req: any, res: any) => {
+  try {
+    const userId = req.userId;
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder: 'orbit_chat/chat_images' },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+      stream.end(req.file.buffer);
+    });
+
+    const imageUrl = (result as any).secure_url;
+    res.json({ imageUrl });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
 // --- GET USER PROFILE ---
 app.get('/users/:userId', verifyToken, async (req: any, res: any) => {
   try {
@@ -706,13 +733,13 @@ app.get('/users/:userId', verifyToken, async (req: any, res: any) => {
     res.status(500).json({ error: 'Failed to fetch user' });
   }
 });
+
 // --- MARK MESSAGES AS READ ---
 app.put('/messages/read/:matchId', verifyToken, async (req: any, res: any) => {
   try {
     const userId = req.userId;
     const { matchId } = req.params;
 
-    // Get the match to find the other user
     const match = await prisma.match.findFirst({
       where: {
         id: matchId,
@@ -727,11 +754,10 @@ app.put('/messages/read/:matchId', verifyToken, async (req: any, res: any) => {
       return res.status(404).json({ error: 'Match not found' });
     }
 
-    // Mark all messages where the current user is the recipient and isRead is false
     const updatedMessages = await prisma.message.updateMany({
       where: {
         matchId: matchId,
-        senderId: { not: userId }, // not sent by current user
+        senderId: { not: userId },
         isRead: false,
       },
       data: {
@@ -739,10 +765,8 @@ app.put('/messages/read/:matchId', verifyToken, async (req: any, res: any) => {
       },
     });
 
-    // Find the other user (the sender)
     const otherUserId = match.user1Id === userId ? match.user2Id : match.user1Id;
 
-    // Emit WebSocket event to the sender
     io.to(`user_${otherUserId}`).emit('messages_read', {
       matchId: matchId,
       readerId: userId,

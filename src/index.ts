@@ -843,7 +843,32 @@ app.get('/users/:userId', verifyToken, async (req: any, res: any) => {
         isVerified: true,
         createdAt: true,
         updatedAt: true,
-      }
+        // --- NEW FIELDS ---
+        interestedIn: true,
+        occupation: true,
+        school: true,
+        education: true,
+        drinking: true,
+        smoking: true,
+        exercise: true,
+        pets: true,
+        communicationStyle: true,
+        loveLanguage: true,
+        personalityType: true,
+        idealFirstDate: true,
+        weekendActivity: true,
+        zodiacSign: true,
+        isEmailVerified: true,
+        isPhoneVerified: true,
+        photos: true,
+        verificationToken: true,
+        verifiedAt: true,
+        resetToken: true,
+        resetTokenExpiry: true,
+        latitude: true,
+        longitude: true,
+        phone: true,
+      },
     });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });

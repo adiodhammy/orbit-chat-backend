@@ -15,27 +15,57 @@ model User {
   birthDate     DateTime
   gender        String
   bio           String?
-  photo		String?
-  preference Preference?
-  interests           String?   // e.g., "Music, Travel"
-  height              Int?      // in cm
-  relationshipGoal    String?   // e.g., "Casual, Serious"
-  phone 	String?
+  photo         String?
+  preference    Preference?
+  interests     String?   // e.g., "Music, Travel"
+  height        Int?      // in cm
+  relationshipGoal String? // e.g., "Casual, Serious"
+  phone         String?
   latitude      Float?
-  verificationToken   String?   // random token for email verification
-  verifiedAt          DateTime? // null if not verified
-  resetToken          String?   // for password reset
-  resetTokenExpiry    DateTime? // expiry for reset token
   longitude     Float?
   isVerified    Boolean   @default(false)
+  verificationToken String? // random token for email verification
+  verifiedAt    DateTime? // null if not verified
+  resetToken    String?   // for password reset
+  resetTokenExpiry DateTime? // expiry for reset token
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  swipesGiven   Swipe[]   @relation("Swiper")
-  swipesReceived Swipe[]  @relation("Swiped")
-  matchesAsUser1 Match[]   @relation("User1")
-  matchesAsUser2 Match[]   @relation("User2")
-  sentMessages  Message[]
+  // --- NEW PROFILE FIELDS ---
+  // Basic
+  interestedIn        String?   // "Men", "Women", "Everyone"
+
+  // About You
+  occupation          String?   // "Student", "Business Owner", "Engineer", etc.
+  school              String?
+  education           String?   // "Secondary School", "Bachelor's Degree", etc.
+
+  // Lifestyle
+  drinking            String?   // "Never", "Occasionally", "Socially", "Frequently"
+  smoking             String?   // "Non-smoker", "Social smoker", etc.
+  exercise            String?   // "Every day", "Often", "Sometimes", "Rarely", "Never"
+  pets                String?   // "Dog", "Cat", "No pets", etc.
+
+  // Personality
+  communicationStyle  String?   // "Big texter", "Phone caller", etc.
+  loveLanguage        String?   // "Quality time", "Words of affirmation", etc.
+  personalityType     String?   // "Introvert", "Extrovert", "Ambivert"
+
+  // Fun Questions
+  idealFirstDate      String?   // "Dinner", "Coffee", "Beach walk", etc.
+  weekendActivity     String?   // "Relaxing at home", "Hanging with friends", etc.
+  zodiacSign          String?   // "Aries", "Taurus", etc.
+
+  // Verification & Photos
+  isEmailVerified     Boolean?  @default(false)
+  isPhoneVerified     Boolean?  @default(false)
+  photos              String[]  // Array of photo URLs (2-6 photos)
+
+  swipesGiven         Swipe[]   @relation("Swiper")
+  swipesReceived      Swipe[]   @relation("Swiped")
+  matchesAsUser1      Match[]   @relation("User1")
+  matchesAsUser2      Match[]   @relation("User2")
+  sentMessages        Message[]
 }
 
 model Swipe {
@@ -77,11 +107,12 @@ model Message {
   replyToId   String?  @map("reply_to_id")
   replyTo     Message? @relation("MessageReplies", fields: [replyToId], references: [id])
   replies     Message[] @relation("MessageReplies")
-  reactions   Reaction[] // <-- NEW
+  reactions   Reaction[]
 
   match       Match    @relation(fields: [matchId], references: [id])
   sender      User     @relation(fields: [senderId], references: [id])
 }
+
 model Preference {
   id              String   @id @default(cuid())
   userId          String   @unique

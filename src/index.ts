@@ -18,7 +18,6 @@ const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL!,
 });
 
-// Configure Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -104,6 +103,95 @@ io.on('connection', (socket) => {
       senderId,
       isTyping: false,
     });
+  });
+
+  // --- MESSAGE REACTIONS (MOVED INSIDE) ---
+  socket.on('add_reaction', async ({ messageId, userId, emoji }) => {
+    try {
+      const reaction = await prisma.reaction.upsert({
+        where: {
+          messageId_userId_emoji: {
+            messageId,
+            userId,
+            emoji,
+          },
+        },
+        update: {},
+        create: {
+          messageId,
+          userId,
+          emoji,
+        },
+      });
+
+      const message = await prisma.message.findUnique({
+        where: { id: messageId },
+        select: { matchId: true },
+      });
+
+      if (message) {
+        const match = await prisma.match.findFirst({
+          where: { id: message.matchId },
+        });
+        if (match) {
+          const recipientId = match.user1Id === userId ? match.user2Id : match.user1Id;
+          io.to(`user_${recipientId}`).emit('reaction_added', {
+            messageId,
+            userId,
+            emoji,
+          });
+          socket.emit('reaction_added', {
+            messageId,
+            userId,
+            emoji,
+          });
+        }
+      }
+    } catch (error) {
+      console.error(error);
+      socket.emit('error', 'Failed to add reaction');
+    }
+  });
+
+  socket.on('remove_reaction', async ({ messageId, userId, emoji }) => {
+    try {
+      await prisma.reaction.delete({
+        where: {
+          messageId_userId_emoji: {
+            messageId,
+            userId,
+            emoji,
+          },
+        },
+      });
+
+      const message = await prisma.message.findUnique({
+        where: { id: messageId },
+        select: { matchId: true },
+      });
+
+      if (message) {
+        const match = await prisma.match.findFirst({
+          where: { id: message.matchId },
+        });
+        if (match) {
+          const recipientId = match.user1Id === userId ? match.user2Id : match.user1Id;
+          io.to(`user_${recipientId}`).emit('reaction_removed', {
+            messageId,
+            userId,
+            emoji,
+          });
+          socket.emit('reaction_removed', {
+            messageId,
+            userId,
+            emoji,
+          });
+        }
+      }
+    } catch (error) {
+      console.error(error);
+      socket.emit('error', 'Failed to remove reaction');
+    }
   });
 
   socket.on('disconnect', () => {
@@ -542,7 +630,7 @@ app.get('/messages/:matchId', verifyToken, async (req: any, res: any) => {
         senderId: true,
         content: true,
         imageUrl: true,
-	audioUrl: true,
+        audioUrl: true,
         sentAt: true,
         isRead: true,
         replyToId: true,
@@ -570,8 +658,8 @@ app.post('/messages', verifyToken, async (req: any, res: any) => {
     const senderId = req.userId;
     const { matchId, content, imageUrl, audioUrl, replyToId } = req.body;
 
-    if (!matchId || (!content && !imageUrl)) {
-      return res.status(400).json({ error: 'Missing matchId, content, or imageUrl' });
+    if (!matchId || (!content && !imageUrl && !audioUrl)) {
+      return res.status(400).json({ error: 'Missing matchId, content, imageUrl, or audioUrl' });
     }
 
     const match = await prisma.match.findFirst({
@@ -594,7 +682,7 @@ app.post('/messages', verifyToken, async (req: any, res: any) => {
         senderId: senderId,
         content: content || null,
         imageUrl: imageUrl || null,
-	audioUrl: audioUrl || null,
+        audioUrl: audioUrl || null,
         replyToId: replyToId || null,
       },
     });
@@ -702,6 +790,36 @@ app.post('/upload/chat', verifyToken, upload.single('image'), async (req: any, r
   }
 });
 
+// --- UPLOAD CHAT AUDIO ---
+app.post('/upload/chat/audio', verifyToken, upload.single('audio'), async (req: any, res: any) => {
+  try {
+    const userId = req.userId;
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { 
+          folder: 'orbit_chat/chat_audio',
+          resource_type: 'auto',
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+      stream.end(req.file.buffer);
+    });
+
+    const audioUrl = (result as any).secure_url;
+    res.json({ audioUrl });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
 // --- GET USER PROFILE ---
 app.get('/users/:userId', verifyToken, async (req: any, res: any) => {
   try {
@@ -734,36 +852,6 @@ app.get('/users/:userId', verifyToken, async (req: any, res: any) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to fetch user' });
-  }
-});
-
-// --- UPLOAD CHAT AUDIO ---
-app.post('/upload/chat/audio', verifyToken, upload.single('audio'), async (req: any, res: any) => {
-  try {
-    const userId = req.userId;
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
-    }
-
-    const result = await new Promise((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream(
-        { 
-          folder: 'orbit_chat/chat_audio',
-          resource_type: 'auto',
-        },
-        (error, result) => {
-          if (error) reject(error);
-          else resolve(result);
-        }
-      );
-      stream.end(req.file.buffer);
-    });
-
-    const audioUrl = (result as any).secure_url;
-    res.json({ audioUrl });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Upload failed' });
   }
 });
 
@@ -813,96 +901,6 @@ app.put('/messages/read/:matchId', verifyToken, async (req: any, res: any) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to mark messages as read' });
-  }
-});
-
-// --- MESSAGE REACTIONS ---
-socket.on('add_reaction', async ({ messageId, userId, emoji }) => {
-  try {
-    const reaction = await prisma.reaction.upsert({
-      where: {
-        messageId_userId_emoji: {
-          messageId,
-          userId,
-          emoji,
-        },
-      },
-      update: {},
-      create: {
-        messageId,
-        userId,
-        emoji,
-      },
-    });
-
-    // Find the message to get the match
-    const message = await prisma.message.findUnique({
-      where: { id: messageId },
-      select: { matchId: true },
-    });
-
-    if (message) {
-      const match = await prisma.match.findFirst({
-        where: { id: message.matchId },
-      });
-      if (match) {
-        const recipientId = match.user1Id === userId ? match.user2Id : match.user1Id;
-        io.to(`user_${recipientId}`).emit('reaction_added', {
-          messageId,
-          userId,
-          emoji,
-        });
-        socket.emit('reaction_added', {
-          messageId,
-          userId,
-          emoji,
-        });
-      }
-    }
-  } catch (error) {
-    console.error(error);
-    socket.emit('error', 'Failed to add reaction');
-  }
-});
-
-socket.on('remove_reaction', async ({ messageId, userId, emoji }) => {
-  try {
-    await prisma.reaction.delete({
-      where: {
-        messageId_userId_emoji: {
-          messageId,
-          userId,
-          emoji,
-        },
-      },
-    });
-
-    const message = await prisma.message.findUnique({
-      where: { id: messageId },
-      select: { matchId: true },
-    });
-
-    if (message) {
-      const match = await prisma.match.findFirst({
-        where: { id: message.matchId },
-      });
-      if (match) {
-        const recipientId = match.user1Id === userId ? match.user2Id : match.user1Id;
-        io.to(`user_${recipientId}`).emit('reaction_removed', {
-          messageId,
-          userId,
-          emoji,
-        });
-        socket.emit('reaction_removed', {
-          messageId,
-          userId,
-          emoji,
-        });
-      }
-    }
-  } catch (error) {
-    console.error(error);
-    socket.emit('error', 'Failed to remove reaction');
   }
 });
 

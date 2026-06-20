@@ -16,6 +16,7 @@ model User {
   gender        String
   bio           String?
   photo		String?
+  preference Preference?
   interests           String?   // e.g., "Music, Travel"
   height              Int?      // in cm
   relationshipGoal    String?   // e.g., "Casual, Serious"
@@ -80,6 +81,17 @@ model Message {
 
   match       Match    @relation(fields: [matchId], references: [id])
   sender      User     @relation(fields: [senderId], references: [id])
+}
+model Preference {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  minAge          Int      @default(18)
+  maxAge          Int      @default(99)
+  maxDistance     Int      @default(100)
+  preferredGender String?  // "Male", "Female", "All"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model Reaction {

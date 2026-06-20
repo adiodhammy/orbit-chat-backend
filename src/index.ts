@@ -903,6 +903,56 @@ app.put('/messages/read/:matchId', verifyToken, async (req: any, res: any) => {
     res.status(500).json({ error: 'Failed to mark messages as read' });
   }
 });
+// --- GET PREFERENCES ---
+app.get('/preferences', verifyToken, async (req: any, res: any) => {
+  try {
+    const userId = req.userId;
+    const preference = await prisma.preference.findUnique({
+      where: { userId },
+    });
+    if (!preference) {
+      return res.status(404).json({ error: 'Preferences not set' });
+    }
+    res.json({ preference });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch preferences' });
+  }
+});
+
+// --- SAVE PREFERENCES ---
+app.post('/preferences', verifyToken, async (req: any, res: any) => {
+  try {
+    const userId = req.userId;
+    const { minAge, maxAge, maxDistance, preferredGender } = req.body;
+
+    if (minAge == null || maxAge == null || maxDistance == null) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const preference = await prisma.preference.upsert({
+      where: { userId },
+      update: {
+        minAge,
+        maxAge,
+        maxDistance,
+        preferredGender: preferredGender || 'All',
+      },
+      create: {
+        userId,
+        minAge,
+        maxAge,
+        maxDistance,
+        preferredGender: preferredGender || 'All',
+      },
+    });
+
+    res.json({ preference });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to save preferences' });
+  }
+});
 
 // --- START SERVER ---
 server.listen(PORT, '0.0.0.0', () => {

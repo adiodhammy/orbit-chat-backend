@@ -475,7 +475,6 @@ app.get('/feed', verifyToken, async (req: any, res: any) => {
 
 // --- SWIPE ---
 app.post('/swipe', verifyToken, async (req: any, res: any) => {
-  // ... (unchanged)
   try {
     const swiperId = req.userId;
     const { swipedId, direction } = req.body;
@@ -560,7 +559,6 @@ app.post('/swipe', verifyToken, async (req: any, res: any) => {
 
 // --- GET MATCHES ---
 app.get('/matches', verifyToken, async (req: any, res: any) => {
-  // ... (unchanged)
   try {
     const userId = req.userId;
 
@@ -619,7 +617,6 @@ app.get('/matches', verifyToken, async (req: any, res: any) => {
 
 // --- GET MESSAGES ---
 app.get('/messages/:matchId', verifyToken, async (req: any, res: any) => {
-  // ... (unchanged)
   try {
     const userId = req.userId;
     const { matchId } = req.params;
@@ -670,7 +667,6 @@ app.get('/messages/:matchId', verifyToken, async (req: any, res: any) => {
 
 // --- SEND MESSAGE (REST) ---
 app.post('/messages', verifyToken, async (req: any, res: any) => {
-  // ... (unchanged)
   try {
     const senderId = req.userId;
     const { matchId, content, imageUrl, audioUrl, replyToId } = req.body;
@@ -751,26 +747,35 @@ app.put('/users/:userId', verifyToken, async (req: any, res: any) => {
   }
 });
 
-// --- UPLOAD PROFILE PHOTO ---
+// --- UPLOAD PROFILE PHOTO (with logging) ---
 app.post('/upload', verifyToken, upload.single('photo'), async (req: any, res: any) => {
   try {
+    console.log('📸 Upload request received');
     const userId = req.userId;
     if (!req.file) {
+      console.log('❌ No file in request');
       return res.status(400).json({ error: 'No file uploaded' });
     }
+    console.log(`📸 File size: ${req.file.size} bytes`);
 
     const result = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         { folder: 'orbit_chat/profiles' },
         (error, result) => {
-          if (error) reject(error);
-          else resolve(result);
+          if (error) {
+            console.error('❌ Cloudinary upload error:', error);
+            reject(error);
+          } else {
+            console.log('✅ Cloudinary upload success');
+            resolve(result);
+          }
         }
       );
       stream.end(req.file.buffer);
     });
 
     const photoUrl = (result as any).secure_url;
+    console.log(`📸 Photo URL: ${photoUrl}`);
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
@@ -783,14 +788,13 @@ app.post('/upload', verifyToken, upload.single('photo'), async (req: any, res: a
       user: updatedUser,
     });
   } catch (error) {
-    console.error(error);
+    console.error('❌ Upload error:', error);
     res.status(500).json({ error: 'Upload failed' });
   }
 });
 
 // --- UPLOAD CHAT IMAGE ---
 app.post('/upload/chat', verifyToken, upload.single('image'), async (req: any, res: any) => {
-  // ... (unchanged)
   try {
     const userId = req.userId;
     if (!req.file) {
@@ -818,7 +822,6 @@ app.post('/upload/chat', verifyToken, upload.single('image'), async (req: any, r
 
 // --- UPLOAD CHAT AUDIO ---
 app.post('/upload/chat/audio', verifyToken, upload.single('audio'), async (req: any, res: any) => {
-  // ... (unchanged)
   try {
     const userId = req.userId;
     if (!req.file) {
@@ -849,7 +852,6 @@ app.post('/upload/chat/audio', verifyToken, upload.single('audio'), async (req: 
 
 // --- GET USER PROFILE ---
 app.get('/users/:userId', verifyToken, async (req: any, res: any) => {
-  // ... (as you have)
   try {
     const userId = req.params.userId;
     if (userId !== req.userId) {
@@ -909,7 +911,6 @@ app.get('/users/:userId', verifyToken, async (req: any, res: any) => {
 
 // --- MARK MESSAGES AS READ ---
 app.put('/messages/read/:matchId', verifyToken, async (req: any, res: any) => {
-  // ... (unchanged)
   try {
     const userId = req.userId;
     const { matchId } = req.params;

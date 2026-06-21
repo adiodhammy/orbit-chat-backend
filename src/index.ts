@@ -830,19 +830,12 @@ app.get('/users/:userId', verifyToken, async (req: any, res: any) => {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
-        id: true,
-        phoneOrEmail: true,
-        name: true,
-        bio: true,
-        photo: true,
-        interests: true,
-        height: true,
-        relationshipGoal: true,
-        birthDate: true,
-        gender: true,
-        isVerified: true,
-        createdAt: true,
-        updatedAt: true,
+        select: {
+	 id: true,
+  	 name: true,
+  	 photo: true,
+ 	 bio: true,
+
         // --- NEW FIELDS ---
         interestedIn: true,
         occupation: true,

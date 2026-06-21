@@ -105,7 +105,7 @@ io.on('connection', (socket) => {
     });
   });
 
-  // --- MESSAGE REACTIONS (MOVED INSIDE) ---
+  // --- MESSAGE REACTIONS ---
   socket.on('add_reaction', async ({ messageId, userId, emoji }) => {
     try {
       const reaction = await prisma.reaction.upsert({
@@ -204,7 +204,7 @@ app.get('/ping', (req, res) => {
   res.send('pong');
 });
 
-// --- REGISTER (Email Verification Bypassed) ---
+// --- REGISTER ---
 app.post('/auth/register', async (req, res) => {
   try {
     const { phoneOrEmail, password, name, birthDate, gender } = req.body;
@@ -259,7 +259,7 @@ app.post('/auth/register', async (req, res) => {
   }
 });
 
-// --- VERIFY EMAIL (Keep for future use) ---
+// --- VERIFY EMAIL (future use) ---
 app.get('/auth/verify', async (req, res) => {
   try {
     const { token } = req.query;
@@ -337,7 +337,7 @@ app.post('/auth/reset-password', async (req, res) => {
   }
 });
 
-// --- LOGIN (Verification Check Removed) ---
+// --- LOGIN ---
 app.post('/auth/login', async (req, res) => {
   try {
     const { phoneOrEmail, password } = req.body;
@@ -381,7 +381,7 @@ app.post('/auth/login', async (req, res) => {
   }
 });
 
-// --- MIDDLEWARE: Verify JWT Token ---
+// --- MIDDLEWARE ---
 const verifyToken = (req: any, res: any, next: any) => {
   const token = req.headers.authorization?.split(' ')[1];
 
@@ -398,11 +398,18 @@ const verifyToken = (req: any, res: any, next: any) => {
   }
 };
 
-// --- FEED ---
+// --- FEED (with blocked filter) ---
 app.get('/feed', verifyToken, async (req: any, res: any) => {
   try {
     const userId = req.userId;
     const limit = parseInt(req.query.limit as string) || 10;
+
+    // Get blocked users
+    const blockedUserIds = await prisma.block.findMany({
+      where: { blockerId: userId },
+      select: { blockedId: true },
+    });
+    const blockedIds = blockedUserIds.map((b) => b.blockedId);
 
     const swipedUserIds = await prisma.swipe.findMany({
       where: { swiperId: userId },
@@ -431,7 +438,7 @@ app.get('/feed', verifyToken, async (req: any, res: any) => {
       return ids;
     });
 
-    const excludedIds = [...swipedIds, ...matchedIds, userId];
+    const excludedIds = [...swipedIds, ...matchedIds, userId, ...blockedIds];
 
     const potentialMatches = await prisma.user.findMany({
       where: {
@@ -446,6 +453,12 @@ app.get('/feed', verifyToken, async (req: any, res: any) => {
         bio: true,
         isVerified: true,
         createdAt: true,
+        occupation: true,
+        education: true,
+        interests: true,
+        isEmailVerified: true,
+        isPhoneVerified: true,
+        photos: true,
       },
       take: limit,
     });
@@ -462,6 +475,7 @@ app.get('/feed', verifyToken, async (req: any, res: any) => {
 
 // --- SWIPE ---
 app.post('/swipe', verifyToken, async (req: any, res: any) => {
+  // ... (unchanged)
   try {
     const swiperId = req.userId;
     const { swipedId, direction } = req.body;
@@ -546,6 +560,7 @@ app.post('/swipe', verifyToken, async (req: any, res: any) => {
 
 // --- GET MATCHES ---
 app.get('/matches', verifyToken, async (req: any, res: any) => {
+  // ... (unchanged)
   try {
     const userId = req.userId;
 
@@ -604,6 +619,7 @@ app.get('/matches', verifyToken, async (req: any, res: any) => {
 
 // --- GET MESSAGES ---
 app.get('/messages/:matchId', verifyToken, async (req: any, res: any) => {
+  // ... (unchanged)
   try {
     const userId = req.userId;
     const { matchId } = req.params;
@@ -654,6 +670,7 @@ app.get('/messages/:matchId', verifyToken, async (req: any, res: any) => {
 
 // --- SEND MESSAGE (REST) ---
 app.post('/messages', verifyToken, async (req: any, res: any) => {
+  // ... (unchanged)
   try {
     const senderId = req.userId;
     const { matchId, content, imageUrl, audioUrl, replyToId } = req.body;
@@ -697,11 +714,18 @@ app.post('/messages', verifyToken, async (req: any, res: any) => {
   }
 });
 
-// --- UPDATE USER PROFILE ---
+// --- UPDATE USER PROFILE (full) ---
 app.put('/users/:userId', verifyToken, async (req: any, res: any) => {
   try {
     const userId = req.params.userId;
-    const { name, bio, interests, height, relationshipGoal } = req.body;
+    const {
+      name, bio, photo, interests, height, relationshipGoal,
+      interestedIn, occupation, school, education,
+      drinking, smoking, exercise, pets,
+      communicationStyle, loveLanguage, personalityType,
+      idealFirstDate, weekendActivity, zodiacSign,
+      photos,
+    } = req.body;
 
     if (userId !== req.userId) {
       return res.status(403).json({ error: 'Forbidden' });
@@ -710,11 +734,12 @@ app.put('/users/:userId', verifyToken, async (req: any, res: any) => {
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
-        name,
-        bio,
-        interests,
-        height,
-        relationshipGoal,
+        name, bio, photo, interests, height, relationshipGoal,
+        interestedIn, occupation, school, education,
+        drinking, smoking, exercise, pets,
+        communicationStyle, loveLanguage, personalityType,
+        idealFirstDate, weekendActivity, zodiacSign,
+        photos,
       },
     });
 
@@ -765,6 +790,7 @@ app.post('/upload', verifyToken, upload.single('photo'), async (req: any, res: a
 
 // --- UPLOAD CHAT IMAGE ---
 app.post('/upload/chat', verifyToken, upload.single('image'), async (req: any, res: any) => {
+  // ... (unchanged)
   try {
     const userId = req.userId;
     if (!req.file) {
@@ -792,6 +818,7 @@ app.post('/upload/chat', verifyToken, upload.single('image'), async (req: any, r
 
 // --- UPLOAD CHAT AUDIO ---
 app.post('/upload/chat/audio', verifyToken, upload.single('audio'), async (req: any, res: any) => {
+  // ... (unchanged)
   try {
     const userId = req.userId;
     if (!req.file) {
@@ -821,8 +848,8 @@ app.post('/upload/chat/audio', verifyToken, upload.single('audio'), async (req: 
 });
 
 // --- GET USER PROFILE ---
-
 app.get('/users/:userId', verifyToken, async (req: any, res: any) => {
+  // ... (as you have)
   try {
     const userId = req.params.userId;
     if (userId !== req.userId) {
@@ -844,7 +871,6 @@ app.get('/users/:userId', verifyToken, async (req: any, res: any) => {
         isVerified: true,
         createdAt: true,
         updatedAt: true,
-        // --- NEW FIELDS ---
         interestedIn: true,
         occupation: true,
         school: true,
@@ -879,4 +905,356 @@ app.get('/users/:userId', verifyToken, async (req: any, res: any) => {
     console.error(error);
     res.status(500).json({ error: 'Failed to fetch user' });
   }
+});
+
+// --- MARK MESSAGES AS READ ---
+app.put('/messages/read/:matchId', verifyToken, async (req: any, res: any) => {
+  // ... (unchanged)
+  try {
+    const userId = req.userId;
+    const { matchId } = req.params;
+
+    const match = await prisma.match.findFirst({
+      where: {
+        id: matchId,
+        OR: [
+          { user1Id: userId },
+          { user2Id: userId },
+        ],
+      },
+    });
+
+    if (!match) {
+      return res.status(404).json({ error: 'Match not found' });
+    }
+
+    const updatedMessages = await prisma.message.updateMany({
+      where: {
+        matchId: matchId,
+        senderId: { not: userId },
+        isRead: false,
+      },
+      data: {
+        isRead: true,
+      },
+    });
+
+    const otherUserId = match.user1Id === userId ? match.user2Id : match.user1Id;
+
+    io.to(`user_${otherUserId}`).emit('messages_read', {
+      matchId: matchId,
+      readerId: userId,
+      readAt: new Date().toISOString(),
+    });
+
+    res.json({
+      message: 'Messages marked as read',
+      count: updatedMessages.count,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to mark messages as read' });
+  }
+});
+
+// --- GET PREFERENCES ---
+app.get('/preferences', verifyToken, async (req: any, res: any) => {
+  try {
+    const userId = req.userId;
+    const preference = await prisma.preference.findUnique({
+      where: { userId },
+    });
+    if (!preference) {
+      return res.status(404).json({ error: 'Preferences not set' });
+    }
+    res.json({ preference });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch preferences' });
+  }
+});
+
+// --- SAVE PREFERENCES ---
+app.post('/preferences', verifyToken, async (req: any, res: any) => {
+  try {
+    const userId = req.userId;
+    const { minAge, maxAge, maxDistance, preferredGender } = req.body;
+
+    if (minAge == null || maxAge == null || maxDistance == null) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const preference = await prisma.preference.upsert({
+      where: { userId },
+      update: {
+        minAge,
+        maxAge,
+        maxDistance,
+        preferredGender: preferredGender || 'All',
+      },
+      create: {
+        userId,
+        minAge,
+        maxAge,
+        maxDistance,
+        preferredGender: preferredGender || 'All',
+      },
+    });
+
+    res.json({ preference });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to save preferences' });
+  }
+});
+
+// --- REPORT A USER ---
+app.post('/reports', verifyToken, async (req: any, res: any) => {
+  try {
+    const reporterId = req.userId;
+    const { reportedId, reason, description } = req.body;
+
+    if (!reportedId || !reason) {
+      return res.status(400).json({ error: 'Missing reportedId or reason' });
+    }
+
+    if (reporterId === reportedId) {
+      return res.status(400).json({ error: 'You cannot report yourself' });
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: reportedId },
+    });
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const report = await prisma.report.create({
+      data: {
+        reporterId,
+        reportedId,
+        reason,
+        description,
+        status: 'PENDING',
+      },
+    });
+
+    res.status(201).json({ report });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to report user' });
+  }
+});
+
+// --- BLOCK A USER ---
+app.post('/blocks', verifyToken, async (req: any, res: any) => {
+  try {
+    const blockerId = req.userId;
+    const { blockedId } = req.body;
+
+    if (!blockedId) {
+      return res.status(400).json({ error: 'Missing blockedId' });
+    }
+
+    if (blockerId === blockedId) {
+      return res.status(400).json({ error: 'You cannot block yourself' });
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: blockedId },
+    });
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const block = await prisma.block.upsert({
+      where: {
+        blockerId_blockedId: {
+          blockerId,
+          blockedId,
+        },
+      },
+      update: {},
+      create: {
+        blockerId,
+        blockedId,
+      },
+    });
+
+    res.status(201).json({ block });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to block user' });
+  }
+});
+
+// --- UNBLOCK A USER ---
+app.delete('/blocks/:blockedId', verifyToken, async (req: any, res: any) => {
+  try {
+    const blockerId = req.userId;
+    const { blockedId } = req.params;
+
+    await prisma.block.delete({
+      where: {
+        blockerId_blockedId: {
+          blockerId,
+          blockedId,
+        },
+      },
+    });
+
+    res.json({ message: 'User unblocked successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to unblock user' });
+  }
+});
+
+// --- GET BLOCKED USERS ---
+app.get('/blocks', verifyToken, async (req: any, res: any) => {
+  try {
+    const blockerId = req.userId;
+
+    const blocks = await prisma.block.findMany({
+      where: { blockerId },
+      include: {
+        blocked: {
+          select: {
+            id: true,
+            name: true,
+            photo: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const blockedUsers = blocks.map((b) => b.blocked);
+    res.json({ blockedUsers });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch blocked users' });
+  }
+});
+
+// --- COMPATIBILITY SCORE ---
+app.get('/compatibility/:userId', verifyToken, async (req: any, res: any) => {
+  try {
+    const currentUserId = req.userId;
+    const targetUserId = req.params.userId;
+
+    if (currentUserId === targetUserId) {
+      return res.status(400).json({ error: 'Cannot compare with yourself' });
+    }
+
+    // Get both users
+    const [currentUser, targetUser] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: currentUserId },
+        select: {
+          interests: true,
+          drinking: true,
+          smoking: true,
+          exercise: true,
+          pets: true,
+          communicationStyle: true,
+          loveLanguage: true,
+          personalityType: true,
+          relationshipGoal: true,
+        },
+      }),
+      prisma.user.findUnique({
+        where: { id: targetUserId },
+        select: {
+          interests: true,
+          drinking: true,
+          smoking: true,
+          exercise: true,
+          pets: true,
+          communicationStyle: true,
+          loveLanguage: true,
+          personalityType: true,
+          relationshipGoal: true,
+        },
+      }),
+    ]);
+
+    if (!currentUser || !targetUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Calculate scores
+    const scores = calculateCompatibility(currentUser, targetUser);
+    const total = Math.round(
+      scores.interests * 0.40 +
+      scores.lifestyle * 0.25 +
+      scores.personality * 0.20 +
+      scores.goals * 0.15
+    );
+
+    res.json({
+      compatibility: total,
+      breakdown: scores,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to calculate compatibility' });
+  }
+});
+
+// --- HELPER: Calculate Compatibility ---
+function calculateCompatibility(user1: any, user2: any) {
+  // 1. Interests (40%)
+  const interests1 = user1.interests?.split(',').map((i: string) => i.trim().toLowerCase()) || [];
+  const interests2 = user2.interests?.split(',').map((i: string) => i.trim().toLowerCase()) || [];
+  const commonInterests = interests1.filter((i: string) => interests2.includes(i));
+  const interestsScore = interests1.length > 0 || interests2.length > 0
+    ? Math.min(100, (commonInterests.length / Math.max(interests1.length, interests2.length)) * 100)
+    : 50;
+
+  // 2. Lifestyle (25%)
+  let lifestyleMatches = 0;
+  let lifestyleTotal = 0;
+  const lifestyleFields = ['drinking', 'smoking', 'exercise', 'pets'];
+  lifestyleFields.forEach((field) => {
+    const val1 = (user1 as any)[field];
+    const val2 = (user2 as any)[field];
+    if (val1 && val2) {
+      lifestyleTotal++;
+      if (val1 === val2) lifestyleMatches++;
+    }
+  });
+  const lifestyleScore = lifestyleTotal > 0 ? (lifestyleMatches / lifestyleTotal) * 100 : 50;
+
+  // 3. Personality (20%)
+  let personalityMatches = 0;
+  let personalityTotal = 0;
+  const personalityFields = ['communicationStyle', 'loveLanguage', 'personalityType'];
+  personalityFields.forEach((field) => {
+    const val1 = (user1 as any)[field];
+    const val2 = (user2 as any)[field];
+    if (val1 && val2) {
+      personalityTotal++;
+      if (val1 === val2) personalityMatches++;
+    }
+  });
+  const personalityScore = personalityTotal > 0 ? (personalityMatches / personalityTotal) * 100 : 50;
+
+  // 4. Relationship Goals (15%)
+  const goal1 = user1.relationshipGoal;
+  const goal2 = user2.relationshipGoal;
+  const goalsScore = goal1 && goal2 && goal1 === goal2 ? 100 : 50;
+
+  return {
+    interests: Math.round(interestsScore),
+    lifestyle: Math.round(lifestyleScore),
+    personality: Math.round(personalityScore),
+    goals: Math.round(goalsScore),
+  };
+}
+
+// --- START SERVER ---
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 ORBIT'S CHAT backend is running on http://0.0.0.0:${PORT}`);
+  console.log(`🔌 WebSocket server is ready on ws://0.0.0.0:${PORT}`);
 });

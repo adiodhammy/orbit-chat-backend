@@ -30,6 +30,10 @@ model User {
   resetTokenExpiry  DateTime? // expiry for reset token
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
+  reportsGiven   Report[] @relation("Reporter")
+  reportsReceived Report[] @relation("Reported")
+  blocksGiven    Block[]  @relation("Blocker")
+  blocksReceived Block[]  @relation("Blocked")
 
   // --- NEW PROFILE FIELDS ---
   // Basic
@@ -124,6 +128,36 @@ model Preference {
   preferredGender String? // "Male", "Female", "All"
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+model Report {
+  id          String   @id @default(cuid())
+  reporterId  String
+  reportedId  String
+  reason      String   // e.g., "Spam", "Harassment", "Fake Profile", "Inappropriate Content", "Other"
+  description String?  // optional user description
+  status      String   @default("PENDING") // "PENDING", "RESOLVED", "DISMISSED"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  reporter    User     @relation("Reporter", fields: [reporterId], references: [id])
+  reported    User     @relation("Reported", fields: [reportedId], references: [id])
+
+  @@index([reporterId])
+  @@index([reportedId])
+}
+
+model Block {
+  id          String   @id @default(cuid())
+  blockerId   String
+  blockedId   String
+  createdAt   DateTime @default(now())
+
+  blocker     User     @relation("Blocker", fields: [blockerId], references: [id])
+  blocked     User     @relation("Blocked", fields: [blockedId], references: [id])
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId])
 }
 
 model Reaction {

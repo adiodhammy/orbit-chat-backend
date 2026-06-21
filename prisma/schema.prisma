@@ -8,109 +8,110 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  phoneOrEmail  String    @unique
-  passwordHash  String
-  name          String
-  birthDate     DateTime
-  gender        String
-  bio           String?
-  photo         String?
-  preference    Preference?
-  interests     String?   // e.g., "Music, Travel"
-  height        Int?      // in cm
-  relationshipGoal String? // e.g., "Casual, Serious"
-  phone         String?
-  latitude      Float?
-  longitude     Float?
-  isVerified    Boolean   @default(false)
+  id                String      @id @default(cuid())
+  phoneOrEmail      String      @unique
+  passwordHash      String
+  name              String
+  birthDate         DateTime
+  gender            String
+  bio               String?
+  photo             String?
+  preference        Preference?
+  interests         String? // e.g., "Music, Travel"
+  height            Int? // in cm
+  relationshipGoal  String? // e.g., "Casual, Serious"
+  phone             String?
+  latitude          Float?
+  longitude         Float?
+  isVerified        Boolean     @default(false)
   verificationToken String? // random token for email verification
-  verifiedAt    DateTime? // null if not verified
-  resetToken    String?   // for password reset
-  resetTokenExpiry DateTime? // expiry for reset token
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  verifiedAt        DateTime? // null if not verified
+  resetToken        String? // for password reset
+  resetTokenExpiry  DateTime? // expiry for reset token
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 
   // --- NEW PROFILE FIELDS ---
   // Basic
-  interestedIn        String?   // "Men", "Women", "Everyone"
+  interestedIn String? // "Men", "Women", "Everyone"
 
   // About You
-  occupation          String?   // "Student", "Business Owner", "Engineer", etc.
-  school              String?
-  education           String?   // "Secondary School", "Bachelor's Degree", etc.
+  occupation String? // "Student", "Business Owner", "Engineer", etc.
+  school     String?
+  education  String? // "Secondary School", "Bachelor's Degree", etc.
 
   // Lifestyle
-  drinking            String?   // "Never", "Occasionally", "Socially", "Frequently"
-  smoking             String?   // "Non-smoker", "Social smoker", etc.
-  exercise            String?   // "Every day", "Often", "Sometimes", "Rarely", "Never"
-  pets                String?   // "Dog", "Cat", "No pets", etc.
+  drinking String? // "Never", "Occasionally", "Socially", "Frequently"
+  smoking  String? // "Non-smoker", "Social smoker", etc.
+  exercise String? // "Every day", "Often", "Sometimes", "Rarely", "Never"
+  pets     String? // "Dog", "Cat", "No pets", etc.
 
   // Personality
-  communicationStyle  String?   // "Big texter", "Phone caller", etc.
-  loveLanguage        String?   // "Quality time", "Words of affirmation", etc.
-  personalityType     String?   // "Introvert", "Extrovert", "Ambivert"
+  communicationStyle String? // "Big texter", "Phone caller", etc.
+  loveLanguage       String? // "Quality time", "Words of affirmation", etc.
+  personalityType    String? // "Introvert", "Extrovert", "Ambivert"
 
   // Fun Questions
-  idealFirstDate      String?   // "Dinner", "Coffee", "Beach walk", etc.
-  weekendActivity     String?   // "Relaxing at home", "Hanging with friends", etc.
-  zodiacSign          String?   // "Aries", "Taurus", etc.
+  idealFirstDate  String? // "Dinner", "Coffee", "Beach walk", etc.
+  weekendActivity String? // "Relaxing at home", "Hanging with friends", etc.
+  zodiacSign      String? // "Aries", "Taurus", etc.
 
   // Verification & Photos
-  isEmailVerified     Boolean?  @default(false)
-  isPhoneVerified     Boolean?  @default(false)
-  photos              String[]  // Array of photo URLs (2-6 photos)
+  isEmailVerified Boolean? @default(false)
+  isPhoneVerified Boolean? @default(false)
+  photos          String[] // Array of photo URLs (2-6 photos)
 
-  swipesGiven         Swipe[]   @relation("Swiper")
-  swipesReceived      Swipe[]   @relation("Swiped")
-  matchesAsUser1      Match[]   @relation("User1")
-  matchesAsUser2      Match[]   @relation("User2")
-  sentMessages        Message[]
+  swipesGiven    Swipe[]    @relation("Swiper")
+  swipesReceived Swipe[]    @relation("Swiped")
+  matchesAsUser1 Match[]    @relation("User1")
+  matchesAsUser2 Match[]    @relation("User2")
+  sentMessages   Message[]
+  reactions      Reaction[]
 }
 
 model Swipe {
-  id          String   @id @default(cuid())
-  swiperId    String
-  swipedId    String
-  direction   String
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  swiperId  String
+  swipedId  String
+  direction String
+  createdAt DateTime @default(now())
 
-  swiper      User     @relation("Swiper", fields: [swiperId], references: [id])
-  swiped      User     @relation("Swiped", fields: [swipedId], references: [id])
+  swiper User @relation("Swiper", fields: [swiperId], references: [id])
+  swiped User @relation("Swiped", fields: [swipedId], references: [id])
 
   @@unique([swiperId, swipedId])
   @@index([swiperId])
 }
 
 model Match {
-  id          String   @id @default(cuid())
-  user1Id     String
-  user2Id     String
-  status      String   @default("PENDING")
-  matchedAt   DateTime @default(now())
-  
-  user1       User     @relation("User1", fields: [user1Id], references: [id])
-  user2       User     @relation("User2", fields: [user2Id], references: [id])
-  
-  messages    Message[]
+  id        String   @id @default(cuid())
+  user1Id   String
+  user2Id   String
+  status    String   @default("PENDING")
+  matchedAt DateTime @default(now())
+
+  user1 User @relation("User1", fields: [user1Id], references: [id])
+  user2 User @relation("User2", fields: [user2Id], references: [id])
+
+  messages Message[]
 }
 
 model Message {
-  id          String   @id @default(cuid())
-  matchId     String
-  senderId    String
-  content     String?
-  imageUrl    String?
-  audioUrl    String?
-  isRead      Boolean  @default(false)
-  sentAt      DateTime @default(now())
-  replyToId   String?  @map("reply_to_id")
-  replyTo     Message? @relation("MessageReplies", fields: [replyToId], references: [id])
-  replies     Message[] @relation("MessageReplies")
-  reactions   Reaction[]
+  id        String     @id @default(cuid())
+  matchId   String
+  senderId  String
+  content   String?
+  imageUrl  String?
+  audioUrl  String?
+  isRead    Boolean    @default(false)
+  sentAt    DateTime   @default(now())
+  replyToId String?    @map("reply_to_id")
+  replyTo   Message?   @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies   Message[]  @relation("MessageReplies")
+  reactions Reaction[]
 
-  match       Match    @relation(fields: [matchId], references: [id])
-  sender      User     @relation(fields: [senderId], references: [id])
+  match  Match @relation(fields: [matchId], references: [id])
+  sender User  @relation(fields: [senderId], references: [id])
 }
 
 model Preference {
@@ -120,20 +121,20 @@ model Preference {
   minAge          Int      @default(18)
   maxAge          Int      @default(99)
   maxDistance     Int      @default(100)
-  preferredGender String?  // "Male", "Female", "All"
+  preferredGender String? // "Male", "Female", "All"
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
 
 model Reaction {
-  id          String   @id @default(cuid())
-  messageId   String
-  userId      String
-  emoji       String   // e.g. "❤️", "😂", "😮", "😢", "👍"
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String // e.g. "❤️", "😂", "😮", "😢", "👍"
+  createdAt DateTime @default(now())
 
-  message     Message  @relation(fields: [messageId], references: [id])
-  user        User     @relation(fields: [userId], references: [id])
+  message Message @relation(fields: [messageId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
 
   @@unique([messageId, userId, emoji])
 }

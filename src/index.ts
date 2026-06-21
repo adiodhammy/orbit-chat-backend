@@ -821,6 +821,7 @@ app.post('/upload/chat/audio', verifyToken, upload.single('audio'), async (req: 
 });
 
 // --- GET USER PROFILE ---
+
 app.get('/users/:userId', verifyToken, async (req: any, res: any) => {
   try {
     const userId = req.params.userId;
@@ -830,12 +831,19 @@ app.get('/users/:userId', verifyToken, async (req: any, res: any) => {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
-        select: {
-	 id: true,
-  	 name: true,
-  	 photo: true,
- 	 bio: true,
-
+        id: true,
+        phoneOrEmail: true,
+        name: true,
+        bio: true,
+        photo: true,
+        interests: true,
+        height: true,
+        relationshipGoal: true,
+        birthDate: true,
+        gender: true,
+        isVerified: true,
+        createdAt: true,
+        updatedAt: true,
         // --- NEW FIELDS ---
         interestedIn: true,
         occupation: true,
@@ -871,109 +879,4 @@ app.get('/users/:userId', verifyToken, async (req: any, res: any) => {
     console.error(error);
     res.status(500).json({ error: 'Failed to fetch user' });
   }
-});
-
-// --- MARK MESSAGES AS READ ---
-app.put('/messages/read/:matchId', verifyToken, async (req: any, res: any) => {
-  try {
-    const userId = req.userId;
-    const { matchId } = req.params;
-
-    const match = await prisma.match.findFirst({
-      where: {
-        id: matchId,
-        OR: [
-          { user1Id: userId },
-          { user2Id: userId },
-        ],
-      },
-    });
-
-    if (!match) {
-      return res.status(404).json({ error: 'Match not found' });
-    }
-
-    const updatedMessages = await prisma.message.updateMany({
-      where: {
-        matchId: matchId,
-        senderId: { not: userId },
-        isRead: false,
-      },
-      data: {
-        isRead: true,
-      },
-    });
-
-    const otherUserId = match.user1Id === userId ? match.user2Id : match.user1Id;
-
-    io.to(`user_${otherUserId}`).emit('messages_read', {
-      matchId: matchId,
-      readerId: userId,
-      readAt: new Date().toISOString(),
-    });
-
-    res.json({
-      message: 'Messages marked as read',
-      count: updatedMessages.count,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to mark messages as read' });
-  }
-});
-// --- GET PREFERENCES ---
-app.get('/preferences', verifyToken, async (req: any, res: any) => {
-  try {
-    const userId = req.userId;
-    const preference = await prisma.preference.findUnique({
-      where: { userId },
-    });
-    if (!preference) {
-      return res.status(404).json({ error: 'Preferences not set' });
-    }
-    res.json({ preference });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to fetch preferences' });
-  }
-});
-
-// --- SAVE PREFERENCES ---
-app.post('/preferences', verifyToken, async (req: any, res: any) => {
-  try {
-    const userId = req.userId;
-    const { minAge, maxAge, maxDistance, preferredGender } = req.body;
-
-    if (minAge == null || maxAge == null || maxDistance == null) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
-
-    const preference = await prisma.preference.upsert({
-      where: { userId },
-      update: {
-        minAge,
-        maxAge,
-        maxDistance,
-        preferredGender: preferredGender || 'All',
-      },
-      create: {
-        userId,
-        minAge,
-        maxAge,
-        maxDistance,
-        preferredGender: preferredGender || 'All',
-      },
-    });
-
-    res.json({ preference });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to save preferences' });
-  }
-});
-
-// --- START SERVER ---
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 ORBIT'S CHAT backend is running on http://0.0.0.0:${PORT}`);
-  console.log(`🔌 WebSocket server is ready on ws://0.0.0.0:${PORT}`);
 });

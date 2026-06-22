@@ -270,9 +270,12 @@ app.post('/auth/register', async (req, res) => {
       user: userWithoutPassword,
       token,
     });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Internal server error' });
+  } catch (error: unknown) {
+  console.error('❌ Registration error:', error);
+  res.status(500).json({
+    error: 'Internal server error',
+    details: error instanceof Error ? error.message : String(error)
+    });
   }
 });
 

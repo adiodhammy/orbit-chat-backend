@@ -45,7 +45,7 @@ const limiter = rateLimit({
 });
 
 app.use(cors({
-  origin: 'https://orbit-chat-six.vercel.app', // ⚠️ replace with your actual frontend
+  origin: '*', // ⚠️ replace with your actual frontend
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
@@ -55,7 +55,7 @@ app.use('/auth', limiter); // protect auth routes
 const server = http.createServer(app);
 const io = new SocketServer(server, {
   cors: {
-    origin: 'https://orbit-chat-six.vercel.app', // same as above
+    origin: '*', // same as above
     methods: ['GET', 'POST'],
   },
 });
@@ -273,9 +273,7 @@ app.post('/auth/register', async (req, res) => {
   } catch (error: unknown) {
   console.error('❌ Registration error:', error);
   res.status(500).json({
-    error: 'Internal server error',
-    details: error instanceof Error ? error.message : String(error)
-    });
+    error: 'Internal server error'});
   }
 });
 

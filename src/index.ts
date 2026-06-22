@@ -10,7 +10,7 @@ import dotenv from 'dotenv';
 import http from 'http';
 import { Server as SocketServer } from 'socket.io';
 import crypto from 'crypto';
-import { sendVerificationEmail, sendResetPasswordEmail } from './services/emailService';
+import { sendVerificationEmail, sendResetPasswordEmail } from './services/emailService.js';
 
 dotenv.config();
 
@@ -19,9 +19,9 @@ const adapter = new PrismaPg({
 });
 
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME!,
+  api_key: process.env.CLOUDINARY_API_KEY!,
+  api_secret: process.env.CLOUDINARY_API_SECRET!,
 });
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -29,13 +29,21 @@ const upload = multer({ storage: multer.memoryStorage() });
 const prisma = new PrismaClient({ adapter });
 
 const app = express();
-const PORT = process.env.PORT || 4000;
+const PORT = parseInt(process.env.PORT || '4000', 10); // fixed: convert to number
 
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
+const server = http.createServer(app);
+const io = new SocketServer(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 
 // --- WebSocket Connection ---
 io.on('connection', (socket) => {
@@ -231,7 +239,7 @@ app.post('/auth/register', async (req, res) => {
         birthDate: new Date(birthDate),
         gender,
         verificationToken,
-        verifiedAt: new Date(),
+        // verifiedAt: new Date(), // <- remove this if you want real email verification
       },
     });
 
@@ -399,41 +407,52 @@ app.get('/feed', verifyToken, async (req: any, res: any) => {
     const userId = req.userId;
     const limit = parseInt(req.query.limit as string) || 10;
 
-    // Get blocked users
-    const blockedUserIds = await prisma.block.findMany({
-      where: { blockerId: userId },
-      select: { blockedId: true },
-    });
-    const blockedIds = blockedUserIds.map((b) => b.blockedId);
+    // Fetch all blocking data in parallel
+    const [blockedByMe, blockedMe, swiped, matches] = await Promise.all([
+      prisma.block.findMany({
+        where: { blockerId: userId },
+        select: { blockedId: true },
+      }),
+      prisma.block.findMany({
+        where: { blockedId: userId },
+        select: { blockerId: true },
+      }),
+      prisma.swipe.findMany({
+        where: { swiperId: userId },
+        select: { swipedId: true },
+      }),
+      prisma.match.findMany({
+        where: {
+          OR: [
+            { user1Id: userId },
+            { user2Id: userId },
+          ],
+        },
+        select: {
+          user1Id: true,
+          user2Id: true,
+        },
+      }),
+    ]);
 
-    const swipedUserIds = await prisma.swipe.findMany({
-      where: { swiperId: userId },
-      select: { swipedId: true },
-    });
-
-    const swipedIds = swipedUserIds.map((s) => s.swipedId);
-
-    const matchedUserIds = await prisma.match.findMany({
-      where: {
-        OR: [
-          { user1Id: userId },
-          { user2Id: userId },
-        ],
-      },
-      select: {
-        user1Id: true,
-        user2Id: true,
-      },
-    });
-
-    const matchedIds = matchedUserIds.flatMap((m) => {
+    // Extract IDs
+    const blockedByIds = blockedByMe.map(({ blockedId }) => blockedId);
+    const blockersIds = blockedMe.map(({ blockerId }) => blockerId);
+    const swipedIds = swiped.map(({ swipedId }) => swipedId);
+    const matchedIds = matches.flatMap((m) => {
       const ids = [];
       if (m.user1Id !== userId) ids.push(m.user1Id);
       if (m.user2Id !== userId) ids.push(m.user2Id);
       return ids;
     });
 
-    const excludedIds = [...swipedIds, ...matchedIds, userId, ...blockedIds];
+    const excludedIds = [
+      ...swipedIds,
+      ...matchedIds,
+      userId,
+      ...blockedByIds,
+      ...blockersIds,
+    ];
 
     const potentialMatches = await prisma.user.findMany({
       where: {
@@ -484,6 +503,19 @@ app.post('/swipe', verifyToken, async (req: any, res: any) => {
 
     if (swiperId === swipedId) {
       return res.status(400).json({ error: 'You cannot swipe on yourself' });
+    }
+
+    // Check if either user is blocked
+    const blockExists = await prisma.block.findFirst({
+      where: {
+        OR: [
+          { blockerId: swiperId, blockedId: swipedId },
+          { blockerId: swipedId, blockedId: swiperId },
+        ],
+      },
+    });
+    if (blockExists) {
+      return res.status(403).json({ error: 'You cannot interact with this user' });
     }
 
     const targetUser = await prisma.user.findUnique({
@@ -684,6 +716,20 @@ app.post('/messages', verifyToken, async (req: any, res: any) => {
       return res.status(404).json({ error: 'Match not found' });
     }
 
+    // Check for blocks between the two users
+    const otherUserId = match.user1Id === senderId ? match.user2Id : match.user1Id;
+    const blockExists = await prisma.block.findFirst({
+      where: {
+        OR: [
+          { blockerId: senderId, blockedId: otherUserId },
+          { blockerId: otherUserId, blockedId: senderId },
+        ],
+      },
+    });
+    if (blockExists) {
+      return res.status(403).json({ error: 'You are blocked from sending messages' });
+    }
+
     const message = await prisma.message.create({
       data: {
         matchId: matchId,
@@ -693,6 +739,13 @@ app.post('/messages', verifyToken, async (req: any, res: any) => {
         audioUrl: audioUrl || null,
         replyToId: replyToId || null,
       },
+    });
+
+    // Emit via socket for real‑time delivery
+    io.to(`user_${otherUserId}`).emit('new_message', {
+      message,
+      matchId,
+      senderId,
     });
 
     res.status(201).json({

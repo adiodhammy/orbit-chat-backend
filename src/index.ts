@@ -10,6 +10,7 @@ import dotenv from 'dotenv';
 import http from 'http';
 import { Server as SocketServer } from 'socket.io';
 import crypto from 'crypto';
+import rateLimit from 'express-rate-limit';
 import { sendVerificationEmail, sendResetPasswordEmail } from './services/emailService.js';
 
 dotenv.config();
@@ -24,27 +25,37 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET!,
 });
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+});
 
 const prisma = new PrismaClient({ adapter });
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '4000', 10); // fixed: convert to number
+const PORT = parseInt(process.env.PORT || '4000', 10);
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: 'Too many requests, please try again later.',
+});
 
 app.use(cors({
-  origin: '*',
+  origin: 'orbit-chat-six.vercel.app', // ⚠️ replace with your actual frontend
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
+app.use('/auth', limiter); // protect auth routes
+
 const server = http.createServer(app);
 const io = new SocketServer(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+    origin: 'https://orbit-chat-six.vercel.app', // same as above
+    methods: ['GET', 'POST'],
+  },
 });
-
 // --- WebSocket Connection ---
 io.on('connection', (socket) => {
   console.log('New client connected:', socket.id);

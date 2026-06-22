@@ -31,16 +31,11 @@ const prisma = new PrismaClient({ adapter });
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-app.use(cors());
-app.use(express.json());
-
-const server = http.createServer(app);
-const io = new SocketServer(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
-});
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 
 // --- WebSocket Connection ---
 io.on('connection', (socket) => {

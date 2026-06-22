@@ -34,6 +34,9 @@ const prisma = new PrismaClient({ adapter });
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '4000', 10);
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.set('trust proxy', 1);
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -42,7 +45,7 @@ const limiter = rateLimit({
 });
 
 app.use(cors({
-  origin: 'orbit-chat-six.vercel.app', // ⚠️ replace with your actual frontend
+  origin: 'https://orbit-chat-six.vercel.app', // ⚠️ replace with your actual frontend
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
@@ -250,7 +253,7 @@ app.post('/auth/register', async (req, res) => {
         birthDate: new Date(birthDate),
         gender,
         verificationToken,
-        // verifiedAt: new Date(), // <- remove this if you want real email verification
+        verifiedAt: new Date(), // <- remove this if you want real email verification
       },
     });
 

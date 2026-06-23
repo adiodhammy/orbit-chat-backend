@@ -30,7 +30,7 @@ model User {
   resetTokenExpiry  DateTime? // expiry for reset token
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
-  statuses      Status[]
+  statuses       Status[]
   reportsGiven   Report[] @relation("Reporter")
   reportsReceived Report[] @relation("Reported")
   blocksGiven    Block[]  @relation("Blocker")
@@ -74,6 +74,7 @@ model User {
   sentMessages   Message[]
   reactions      Reaction[]
 }
+
 model Status {
   id        String   @id @default(cuid())
   userId    String

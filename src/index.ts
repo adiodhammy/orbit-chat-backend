@@ -1317,6 +1317,126 @@ function calculateCompatibility(user1: any, user2: any) {
   };
 }
 
+// --- UPLOAD STATUS ---
+app.post('/status', verifyToken, upload.single('image'), async (req: any, res: any) => {
+  try {
+    const userId = req.userId;
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image uploaded' });
+    }
+
+    // Upload to Cloudinary
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder: 'orbit_chat/status' },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+      stream.end(req.file.buffer);
+    });
+
+    const imageUrl = (result as any).secure_url;
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    const status = await prisma.status.create({
+      data: {
+        userId,
+        imageUrl,
+        expiresAt,
+      },
+    });
+
+    res.status(201).json({ status });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to upload status' });
+  }
+});
+
+// --- GET STATUSES (from matches + own) ---
+app.get('/status', verifyToken, async (req: any, res: any) => {
+  try {
+    const userId = req.userId;
+    const now = new Date();
+
+    // Get matches (both directions)
+    const matches = await prisma.match.findMany({
+      where: {
+        OR: [{ user1Id: userId }, { user2Id: userId }],
+        status: 'PENDING',
+      },
+      select: {
+        user1Id: true,
+        user2Id: true,
+      },
+    });
+
+    // Extract match user IDs
+    const matchUserIds = matches.flatMap((m) => {
+      const ids = [];
+      if (m.user1Id !== userId) ids.push(m.user1Id);
+      if (m.user2Id !== userId) ids.push(m.user2Id);
+      return ids;
+    });
+
+    // Include own userId so we can fetch own status too
+    const allUserIds = [...matchUserIds, userId];
+
+    // Fetch active statuses for these users
+    const statuses = await prisma.status.findMany({
+      where: {
+        userId: { in: allUserIds },
+        expiresAt: { gt: now },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            photo: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Separate own status and others
+    const ownStatus = statuses.find((s) => s.userId === userId);
+    const othersStatus = statuses.filter((s) => s.userId !== userId);
+
+    res.json({
+      own: ownStatus || null,
+      others: othersStatus,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch statuses' });
+  }
+});
+
+// --- DELETE STATUS (optional) ---
+app.delete('/status/:id', verifyToken, async (req: any, res: any) => {
+  try {
+    const userId = req.userId;
+    const { id } = req.params;
+
+    const status = await prisma.status.findFirst({
+      where: { id, userId },
+    });
+    if (!status) {
+      return res.status(404).json({ error: 'Status not found' });
+    }
+
+    await prisma.status.delete({ where: { id } });
+    res.json({ message: 'Status deleted' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to delete status' });
+  }
+});
+
 // --- START SERVER ---
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 ORBIT'S CHAT backend is running on http://0.0.0.0:${PORT}`);

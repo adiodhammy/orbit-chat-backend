@@ -72,6 +72,17 @@ model User {
   sentMessages   Message[]
   reactions      Reaction[]
 }
+model Status {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  imageUrl  String   // Cloudinary URL
+  createdAt DateTime @default(now())
+  expiresAt DateTime // createdAt + 24 hours
+
+  @@index([userId])
+  @@index([expiresAt])
+}
 
 model Swipe {
   id        String   @id @default(cuid())

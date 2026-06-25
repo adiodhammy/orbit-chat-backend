@@ -367,18 +367,23 @@ app.post('/auth/login', async (req, res) => {
     }
 
     const user = await prisma.user.findUnique({
-      where: { phoneOrEmail: phoneOrEmail },
-    });
+  where: { phoneOrEmail: phoneOrEmail },
+});
 
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+console.log("Login attempt:", phoneOrEmail);
+console.log("User found:", !!user);
 
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+if (!user) {
+  return res.status(401).json({ error: 'Invalid credentials' });
+}
 
-    if (!isPasswordValid) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+
+console.log("Password valid:", isPasswordValid);
+
+if (!isPasswordValid) {
+  return res.status(401).json({ error: 'Invalid credentials' });
+}
 
     const token = jwt.sign(
       { userId: user.id, phoneOrEmail: user.phoneOrEmail },
@@ -537,8 +542,8 @@ if (!currentUser.isPremium) {
       return res.status(400).json({ error: 'Missing required fields: swipedId, direction' });
     }
 
-    if (!['RIGHT', 'LEFT'].includes(direction)) {
-      return res.status(400).json({ error: 'Direction must be "RIGHT" or "LEFT"' });
+    if (!['LIKE', 'PASS'].includes(direction)) {
+      return res.status(400).json({ error: 'Direction must be "LIKE" or "PASS"' });
     }
 
     if (swiperId === swipedId) {
@@ -601,7 +606,7 @@ if (!currentUser.isPremium) {
     let match = null;
     let isMatch = false;
 
-    if (direction === 'RIGHT') {
+    if (direction === 'LIKE') {
       const reciprocalSwipe = await prisma.swipe.findUnique({
         where: {
           swiperId_swipedId: {
@@ -611,20 +616,38 @@ if (!currentUser.isPremium) {
         },
       });
 
-      if (reciprocalSwipe && reciprocalSwipe.direction === 'RIGHT') {
+            const existingMatch = await prisma.match.findFirst({
+        where: {
+          OR: [
+            {
+              user1Id: swiperId,
+              user2Id: swipedId,
+            },
+            {
+              user1Id: swipedId,
+              user2Id: swiperId,
+            },
+          ],
+        },
+      });
+
+      if (!existingMatch) {
         match = await prisma.match.create({
           data: {
             user1Id: swiperId,
             user2Id: swipedId,
-            status: 'PENDING',
+            status: 'ACTIVE',
           },
         });
-        isMatch = true;
+      } else {
+        match = existingMatch;
       }
-    }
+
+      isMatch = true;
+          }
 
     res.status(201).json({
-      message: 'Swipe recorded successfully',
+      message: isMatch ? "It's a match! 🎉" : "Profile liked",
       swipe: swipe,
       isMatch: isMatch,
       match: match,

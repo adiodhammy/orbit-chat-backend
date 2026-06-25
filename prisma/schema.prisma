@@ -35,6 +35,8 @@ model User {
   reportsReceived   Report[]    @relation("Reported")
   blocksGiven       Block[]     @relation("Blocker")
   blocksReceived    Block[]     @relation("Blocked")
+ 
+
 
   // --- NEW PROFILE FIELDS ---
   // Basic
@@ -103,25 +105,12 @@ model Status {
   @@index([expiresAt])
 }
 
-model Swipe {
-  id        String   @id @default(cuid())
-  swiperId  String
-  swipedId  String
-  direction String
-  createdAt DateTime @default(now())
-
-  swiper User @relation("Swiper", fields: [swiperId], references: [id])
-  swiped User @relation("Swiped", fields: [swipedId], references: [id])
-
-  @@unique([swiperId, swipedId])
-  @@index([swiperId])
-}
 
 model Match {
   id        String   @id @default(cuid())
   user1Id   String
   user2Id   String
-  status    String   @default("PENDING")
+  status    String   @default("ACTIVE")
   matchedAt DateTime @default(now())
 
   user1 User @relation("User1", fields: [user1Id], references: [id])
@@ -146,6 +135,26 @@ model Message {
 
   match  Match @relation(fields: [matchId], references: [id])
   sender User  @relation(fields: [senderId], references: [id])
+}
+
+model Swipe {
+  id        String   @id @default(cuid())
+
+  swiperId  String
+  swipedId  String
+
+  // LIKE, PASS, SUPERLIKE
+  direction String
+
+  createdAt DateTime @default(now())
+
+  swiper User @relation("Swiper", fields: [swiperId], references: [id], onDelete: Cascade)
+  swiped User @relation("Swiped", fields: [swipedId], references: [id], onDelete: Cascade)
+
+  @@unique([swiperId, swipedId])
+  @@index([swiperId])
+  @@index([swipedId])
+  @@index([direction])
 }
 
 model Preference {

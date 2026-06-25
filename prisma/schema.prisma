@@ -30,12 +30,11 @@ model User {
   resetTokenExpiry  DateTime? // expiry for reset token
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
-  statuses       Status[]
-  reportsGiven   Report[] @relation("Reporter")
-  reportsReceived Report[] @relation("Reported")
-  blocksGiven    Block[]  @relation("Blocker")
-  blocksReceived Block[]  @relation("Blocked")
- 
+  statuses          Status[]
+  reportsGiven      Report[]    @relation("Reporter")
+  reportsReceived   Report[]    @relation("Reported")
+  blocksGiven       Block[]     @relation("Blocker")
+  blocksReceived    Block[]     @relation("Blocked")
 
   // --- NEW PROFILE FIELDS ---
   // Basic
@@ -73,13 +72,30 @@ model User {
   matchesAsUser2 Match[]    @relation("User2")
   sentMessages   Message[]
   reactions      Reaction[]
+
+  subscription Subscription?
+
+  // Premium System
+  isPremium        Boolean   @default(false)
+  premiumExpiresAt DateTime?
+
+  // Coins
+  coins Int @default(0)
+
+  // Daily Limits
+  dailyChatCount  Int @default(0)
+  dailySwipeCount Int @default(0)
+
+  // Ads Rewards
+  rewardedChats  Int @default(0)
+  rewardedSwipes Int @default(0)
 }
 
 model Status {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  imageUrl  String   // Cloudinary URL
+  imageUrl  String // Cloudinary URL
   createdAt DateTime @default(now())
   expiresAt DateTime // createdAt + 24 hours
 
@@ -148,30 +164,46 @@ model Report {
   id          String   @id @default(cuid())
   reporterId  String
   reportedId  String
-  reason      String   // e.g., "Spam", "Harassment", "Fake Profile", "Inappropriate Content", "Other"
-  description String?  // optional user description
+  reason      String // e.g., "Spam", "Harassment", "Fake Profile", "Inappropriate Content", "Other"
+  description String? // optional user description
   status      String   @default("PENDING") // "PENDING", "RESOLVED", "DISMISSED"
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  reporter    User     @relation("Reporter", fields: [reporterId], references: [id])
-  reported    User     @relation("Reported", fields: [reportedId], references: [id])
+  reporter User @relation("Reporter", fields: [reporterId], references: [id])
+  reported User @relation("Reported", fields: [reportedId], references: [id])
 
   @@index([reporterId])
   @@index([reportedId])
 }
 
 model Block {
-  id          String   @id @default(cuid())
-  blockerId   String
-  blockedId   String
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
 
-  blocker     User     @relation("Blocker", fields: [blockerId], references: [id])
-  blocked     User     @relation("Blocked", fields: [blockedId], references: [id])
+  blocker User @relation("Blocker", fields: [blockerId], references: [id])
+  blocked User @relation("Blocked", fields: [blockedId], references: [id])
 
   @@unique([blockerId, blockedId])
   @@index([blockerId])
+}
+
+model Subscription {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  plan   String
+  amount Float
+
+  startsAt  DateTime @default(now())
+  expiresAt DateTime
+
+  status String @default("ACTIVE")
+
+  createdAt DateTime @default(now())
 }
 
 model Reaction {

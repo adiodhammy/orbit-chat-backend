@@ -508,6 +508,31 @@ app.post('/swipe', verifyToken, async (req: any, res: any) => {
     const swiperId = req.userId;
     const { swipedId, direction } = req.body;
 
+    const currentUser = await prisma.user.findUnique({
+  where: { id: swiperId },
+  select: {
+    isPremium: true,
+    dailySwipeCount: true,
+    rewardedSwipes: true,
+  },
+});
+
+if (!currentUser) {
+  return res.status(404).json({ error: 'User not found' });
+}
+
+// Premium users = unlimited
+if (!currentUser.isPremium) {
+  const swipeLimit = 10 + currentUser.rewardedSwipes;
+
+  if (currentUser.dailySwipeCount >= swipeLimit) {
+    return res.status(403).json({
+      error: 'Daily swipe limit reached',
+      upgradeRequired: true,
+    });
+  }
+}
+
     if (!swipedId || !direction) {
       return res.status(400).json({ error: 'Missing required fields: swipedId, direction' });
     }
@@ -562,6 +587,17 @@ app.post('/swipe', verifyToken, async (req: any, res: any) => {
       },
     });
 
+    if (!currentUser.isPremium) {
+  await prisma.user.update({
+    where: { id: swiperId },
+    data: {
+      dailySwipeCount: {
+        increment: 1,
+      },
+    },
+  });
+}
+
     let match = null;
     let isMatch = false;
 
@@ -598,6 +634,8 @@ app.post('/swipe', verifyToken, async (req: any, res: any) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+
 
 // --- GET MATCHES ---
 app.get('/matches', verifyToken, async (req: any, res: any) => {
@@ -654,6 +692,46 @@ app.get('/matches', verifyToken, async (req: any, res: any) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// --- CHECK IF TWO USERS ARE MATCHED ---
+app.get('/matches/with/:userId', verifyToken, async (req: any, res: any) => {
+  try {
+    const currentUserId = req.userId;
+    const otherUserId = req.params.userId;
+
+    const match = await prisma.match.findFirst({
+      where: {
+        status: "PENDING",
+        OR: [
+          {
+            user1Id: currentUserId,
+            user2Id: otherUserId,
+          },
+          {
+            user1Id: otherUserId,
+            user2Id: currentUserId,
+          },
+        ],
+      },
+    });
+
+    if (!match) {
+      return res.json({
+        matched: false,
+      });
+    }
+
+    res.json({
+      matched: true,
+      matchId: match.id,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: "Internal server error",
+    });
   }
 });
 

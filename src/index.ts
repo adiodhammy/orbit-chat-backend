@@ -671,7 +671,7 @@ app.get('/matches', verifyToken, async (req: any, res: any) => {
           { user1Id: userId },
           { user2Id: userId },
         ],
-        status: 'PENDING',
+        status: 'ACTIVE',
       },
       include: {
         user1: {
@@ -726,7 +726,7 @@ app.get('/matches/with/:userId', verifyToken, async (req: any, res: any) => {
 
     const match = await prisma.match.findFirst({
       where: {
-        status: "PENDING",
+        status: "ACTIVE",
         OR: [
           {
             user1Id: currentUserId,
